@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as teamService from "../services/team-service.js";
+import * as harnessService from "../services/harness-service.js";
 
 const router = Router();
 
@@ -51,6 +52,25 @@ router.get("/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to get team:", err);
     res.status(500).json({ error: "Failed to get team" });
+  }
+});
+
+// GET /api/teams/:id/harness - Export team as harness
+router.get("/:id/harness", async (req, res) => {
+  try {
+    const harness = await harnessService.exportHarness(req.params["id"]!);
+    res.json(harness);
+  } catch (err) {
+    if (err instanceof Error && (err as Error & { code: string }).code === "NOT_FOUND") {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
+    if (err instanceof Error && (err as Error & { code: string }).code === "NO_AGENTS") {
+      res.status(400).json({ error: "Team has no agents" });
+      return;
+    }
+    console.error("Failed to export harness:", err);
+    res.status(500).json({ error: "Failed to export harness" });
   }
 });
 

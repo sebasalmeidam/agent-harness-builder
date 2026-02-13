@@ -197,3 +197,107 @@ describe("DELETE /api/teams/:id", () => {
     expect(res.body).toEqual({ error: "Team not found" });
   });
 });
+
+describe("GET /api/teams/:id/harness", () => {
+  it("returns a harness with version 1.0 and correct agents and edges", async () => {
+    // Create a team
+    await request(app)
+      .post("/api/teams")
+      .send({ name: "Harness Team", description: "For harness export" });
+
+    // Add agents and edges via update
+    await request(app)
+      .put("/api/teams/harness-team")
+      .send({
+        id: "harness-team",
+        name: "Harness Team",
+        description: "For harness export",
+        agents: [
+          {
+            id: "agent-1",
+            name: "Developer",
+            emoji: "👨‍💻",
+            role: "software-developer",
+            goal: "Write clean code",
+            skills: ["TypeScript", "React"],
+            practices: ["TDD", "Code review"],
+            position: { x: 100, y: 200 },
+          },
+          {
+            id: "agent-2",
+            name: "Reviewer",
+            emoji: "🔍",
+            role: "code-reviewer",
+            goal: "Ensure quality",
+            skills: ["Architecture"],
+            practices: ["SOLID"],
+            position: { x: 300, y: 200 },
+          },
+        ],
+        edges: [
+          {
+            id: "edge-1",
+            source: "agent-1",
+            target: "agent-2",
+            type: "passes-work-to",
+            label: "Submit for review",
+            failureRouting: null,
+            gate: { type: "auto" },
+          },
+        ],
+      });
+
+    const res = await request(app).get("/api/teams/harness-team/harness");
+    expect(res.status).toBe(200);
+    expect(res.body.harnessVersion).toBe("1.0");
+    expect(res.body.name).toBe("Harness Team");
+    expect(res.body.description).toBe("For harness export");
+    expect(res.body.agents).toHaveLength(2);
+    expect(res.body.agents[0]).toEqual({
+      id: "agent-1",
+      name: "Developer",
+      emoji: "👨‍💻",
+      role: "software-developer",
+      goal: "Write clean code",
+      skills: ["TypeScript", "React"],
+      practices: ["TDD", "Code review"],
+      position: { x: 100, y: 200 },
+    });
+    expect(res.body.agents[1]).toEqual({
+      id: "agent-2",
+      name: "Reviewer",
+      emoji: "🔍",
+      role: "code-reviewer",
+      goal: "Ensure quality",
+      skills: ["Architecture"],
+      practices: ["SOLID"],
+      position: { x: 300, y: 200 },
+    });
+    expect(res.body.edges).toHaveLength(1);
+    expect(res.body.edges[0]).toEqual({
+      id: "edge-1",
+      source: "agent-1",
+      target: "agent-2",
+      type: "passes-work-to",
+      label: "Submit for review",
+      failureRouting: null,
+      gate: { type: "auto" },
+    });
+  });
+
+  it("returns 404 for a nonexistent team", async () => {
+    const res = await request(app).get("/api/teams/nonexistent/harness");
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Team not found" });
+  });
+
+  it("returns 400 for a team with no agents", async () => {
+    await request(app)
+      .post("/api/teams")
+      .send({ name: "Empty Team", description: "No agents here" });
+
+    const res = await request(app).get("/api/teams/empty-team/harness");
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Team has no agents" });
+  });
+});

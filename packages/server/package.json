@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@agent-harness/runtime": "workspace:*",
     "express": "^5.1.0"
   },
   "devDependencies": {
