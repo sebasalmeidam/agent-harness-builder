@@ -12,7 +12,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2, Download } from "lucide-react";
 import TeamCanvas from "../components/canvas/TeamCanvas";
 import AgentSidebar from "../components/sidebar/AgentSidebar";
 import EdgeSidebar from "../components/sidebar/EdgeSidebar";
@@ -137,6 +137,7 @@ function TeamDetailContent() {
   // Save state
   const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -466,6 +467,44 @@ function TeamDetailContent() {
     }
   }, [team, navigate]);
 
+  const handleExportHarness = useCallback(async () => {
+    if (!team) return;
+
+    setExporting(true);
+    setSaveMessage(null);
+
+    try {
+      const res = await fetch(`/api/teams/${team.id}/harness`);
+
+      if (!res.ok) {
+        if (res.status === 400) {
+          throw new Error("Cannot export: team has no agents");
+        }
+        throw new Error(`Export failed: ${res.statusText}`);
+      }
+
+      const harnessJson = await res.json();
+      const blob = new Blob([JSON.stringify(harnessJson, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${team.id}.harness.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSaveMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to export harness",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [team]);
+
   // Find the selected node's data for the sidebar
   const selectedNode = selectedNodeId
     ? nodes.find((n) => n.id === selectedNodeId)
@@ -565,6 +604,21 @@ function TeamDetailContent() {
           >
             <Trash2 className="h-4 w-4" />
             Delete
+          </button>
+          <button
+            onClick={handleExportHarness}
+            disabled={nodes.length === 0 || isDirty || exporting}
+            title={
+              nodes.length === 0
+                ? "Add agents first"
+                : isDirty
+                  ? "Save changes first"
+                  : "Export as harness file"
+            }
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-secondary transition-colors hover:border-primary hover:text-primary disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-secondary"
+          >
+            <Download className="h-4 w-4" />
+            Export Harness
           </button>
           <button
             onClick={handleSave}

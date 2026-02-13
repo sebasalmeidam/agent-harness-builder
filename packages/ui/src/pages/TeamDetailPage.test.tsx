@@ -83,6 +83,54 @@ beforeEach(() => {
     const urlStr = typeof url === "string" ? url : url.toString();
     const method = init?.method ?? "GET";
 
+    if (urlStr.endsWith("/api/teams/test-team/harness") && method === "GET") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            harnessVersion: "1.0",
+            name: mockTeam.name,
+            description: mockTeam.description,
+            agents: mockTeam.agents,
+            edges: mockTeam.edges,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+
+    if (
+      urlStr.endsWith("/api/teams/empty-team/harness") && method === "GET"
+    ) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ error: "Team has no agents" }),
+          {
+            status: 400,
+            statusText: "Bad Request",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+
+    if (
+      urlStr.endsWith("/api/teams/save-error/harness") && method === "GET"
+    ) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ error: "Server error" }),
+          {
+            status: 500,
+            statusText: "Internal Server Error",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+
     if (urlStr.includes("/api/teams/test-team") && method === "GET") {
       return Promise.resolve(
         new Response(JSON.stringify(mockTeam), {
@@ -692,5 +740,216 @@ describe("flowEdgesToTeamEdges", () => {
     expect(teamEdges[0].type).toBe("escalates-to");
     expect(teamEdges[0].gate).toEqual({ type: "manual" });
     expect(teamEdges[0].failureRouting).toBeNull();
+  });
+});
+
+// --- Export Harness tests ---
+
+describe("Export Harness", () => {
+  test("renders Export Harness button in the header", async () => {
+    renderTeamDetail("test-team");
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Harness")).toBeTruthy();
+    });
+  });
+
+  test("export button is disabled when no agents on canvas", async () => {
+    renderTeamDetail("empty-team");
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Harness")).toBeTruthy();
+    });
+
+    const exportBtn = screen.getByText("Export Harness").closest("button")!;
+    expect(exportBtn.disabled).toBe(true);
+    expect(exportBtn.title).toBe("Add agents first");
+  });
+
+  test("export button is disabled when isDirty is true", async () => {
+    renderTeamDetail("test-team");
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Harness")).toBeTruthy();
+    });
+
+    // Wait for initial load to complete
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Make a change to set isDirty
+    fireEvent.change(screen.getByLabelText("Team name"), {
+      target: { value: "Changed Name" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("dirty-indicator")).toBeTruthy();
+    });
+
+    const exportBtn = screen.getByText("Export Harness").closest("button")!;
+    expect(exportBtn.disabled).toBe(true);
+    expect(exportBtn.title).toBe("Save changes first");
+  });
+
+  test("successful export triggers download", async () => {
+    const mockUrl = "blob:http://localhost/mock-blob-url";
+
+    // URL.createObjectURL / revokeObjectURL may not exist in test env
+    if (!URL.createObjectURL) {
+      URL.createObjectURL = vi.fn();
+    }
+    if (!URL.revokeObjectURL) {
+      URL.revokeObjectURL = vi.fn();
+    }
+
+    const createObjectURLSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue(mockUrl);
+    const revokeObjectURLSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+
+    // Track the anchor element created for download
+    const clickSpy = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string, options?: ElementCreationOptions) => {
+        const el = originalCreateElement(tagName, options);
+        if (tagName === "a") {
+          el.click = clickSpy;
+        }
+        return el;
+      });
+
+    renderTeamDetail("test-team");
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Harness")).toBeTruthy();
+    });
+
+    const exportBtn = screen.getByText("Export Harness").closest("button")!;
+    expect(exportBtn.disabled).toBe(false);
+
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(clickSpy).toHaveBeenCalled();
+    });
+
+    expect(createObjectURLSpy).toHaveBeenCalledWith(expect.any(Blob));
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith(mockUrl);
+
+    createObjectURLSpy.mockRestore();
+    revokeObjectURLSpy.mockRestore();
+    createElementSpy.mockRestore();
+  });
+
+  test("export 500 error shows generic error message", async () => {
+    // Override fetch to make harness endpoint fail with 500
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (
+          urlStr.endsWith("/api/teams/test-team/harness") &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: "Server error" }), {
+              status: 500,
+              statusText: "Internal Server Error",
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        if (urlStr.includes("/api/teams/test-team") && method === "GET") {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockTeam), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+          }),
+        );
+      },
+    );
+
+    renderTeamDetail("test-team");
+
+    await waitFor(() => {
+      const exportBtn = screen.getByText("Export Harness").closest("button")!;
+      expect(exportBtn.disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByText("Export Harness"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Export failed: Internal Server Error"),
+      ).toBeTruthy();
+    });
+  });
+
+  test("export 400 error shows no-agents message", async () => {
+    // Override fetch to make harness endpoint fail with 400
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (
+          urlStr.endsWith("/api/teams/test-team/harness") &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ error: "Team has no agents" }),
+              {
+                status: 400,
+                statusText: "Bad Request",
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+        }
+
+        if (urlStr.includes("/api/teams/test-team") && method === "GET") {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockTeam), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+          }),
+        );
+      },
+    );
+
+    renderTeamDetail("test-team");
+
+    await waitFor(() => {
+      const exportBtn = screen.getByText("Export Harness").closest("button")!;
+      expect(exportBtn.disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByText("Export Harness"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Cannot export: team has no agents"),
+      ).toBeTruthy();
+    });
   });
 });
