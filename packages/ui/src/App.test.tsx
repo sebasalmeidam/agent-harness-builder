@@ -16,14 +16,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test('redirects / to /teams and renders Teams heading', async () => {
+test('renders DashboardPage at / with welcome header', async () => {
   render(
     <MemoryRouter initialEntries={['/']}>
       <App />
     </MemoryRouter>,
   );
   await waitFor(() => {
-    expect(screen.getByText('Teams')).toBeTruthy();
+    expect(screen.getByText('Welcome back')).toBeTruthy();
   });
 });
 
