@@ -4,6 +4,9 @@
 # Development docs (private workspace)
 .dev-docs/
 
+# Generated workflow artifacts (PRDs, ADRs, tracking)
+docs/
+
 # Dependencies
 node_modules/
 .pnp
