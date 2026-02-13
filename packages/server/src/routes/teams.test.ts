@@ -37,7 +37,32 @@ describe("GET /api/teams", () => {
       name: "My Team",
       description: "A test team",
       agentCount: 0,
+      agentEmojis: [],
     });
+  });
+
+  it("returns agentEmojis in team summaries when team has agents", async () => {
+    await request(app)
+      .post("/api/teams")
+      .send({ name: "Emoji Team", description: "Has agents" });
+
+    await request(app)
+      .put("/api/teams/emoji-team")
+      .send({
+        id: "emoji-team",
+        name: "Emoji Team",
+        description: "Has agents",
+        agents: [
+          { id: "a1", name: "Dev", emoji: "\uD83D\uDC68\u200D\uD83D\uDCBB", role: "dev", goal: "", skills: [], practices: [], position: { x: 0, y: 0 } },
+          { id: "a2", name: "QA", emoji: "\uD83D\uDD0D", role: "qa", goal: "", skills: [], practices: [], position: { x: 100, y: 0 } },
+        ],
+        edges: [],
+      });
+
+    const res = await request(app).get("/api/teams");
+    const team = res.body.find((t: { id: string }) => t.id === "emoji-team");
+    expect(team.agentEmojis).toEqual(["\uD83D\uDC68\u200D\uD83D\uDCBB", "\uD83D\uDD0D"]);
+    expect(team.agentCount).toBe(2);
   });
 });
 

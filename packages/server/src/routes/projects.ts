@@ -16,10 +16,11 @@ router.get("/", async (_req, res) => {
 
 // POST /api/projects - Create a new project
 router.post("/", async (req, res) => {
-  const { name, description, gitUrl } = req.body as {
+  const { name, description, gitUrl, emoji } = req.body as {
     name?: string;
     description?: string;
     gitUrl?: string;
+    emoji?: string;
   };
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -32,6 +33,7 @@ router.post("/", async (req, res) => {
       name: name.trim(),
       description: typeof description === "string" ? description.trim() : "",
       gitUrl: typeof gitUrl === "string" ? gitUrl : undefined,
+      emoji: typeof emoji === "string" ? emoji : undefined,
     });
 
     const response: Record<string, unknown> = { ...project };
@@ -128,13 +130,19 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
+  if ("emoji" in body) {
+    if (typeof body.emoji !== "string") {
+      errors.push("emoji must be a string");
+    }
+  }
+
   if (errors.length > 0) {
     res.status(400).json({ error: errors.join("; ") });
     return;
   }
 
   // Extract only allowed fields, strip non-updatable fields
-  const allowedFields = ["name", "description", "spec", "teamId"] as const;
+  const allowedFields = ["name", "description", "spec", "teamId", "emoji"] as const;
   const validUpdates: Record<string, unknown> = {};
 
   for (const field of allowedFields) {
@@ -144,7 +152,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   if (Object.keys(validUpdates).length === 0) {
-    res.status(400).json({ error: "Request body must contain at least one updatable field (name, description, spec, teamId)" });
+    res.status(400).json({ error: "Request body must contain at least one updatable field (name, description, spec, teamId, emoji)" });
     return;
   }
 

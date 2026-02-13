@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cloneRepository } from "../services/git-service.js";
@@ -44,8 +44,37 @@ describe("GET /api/projects", () => {
     expect(res.body[0].id).toBe("my-project");
     expect(res.body[0].name).toBe("My Project");
     expect(res.body[0].description).toBe("A test project");
+    expect(res.body[0].emoji).toBe("\uD83D\uDCE6");
     expect(res.body[0].teamId).toBeNull();
+    expect(res.body[0].runCount).toBe(0);
     expect(res.body[0].createdAt).toBeDefined();
+  });
+
+  it("returns correct runCount when .runs/ directory has json files", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Run Count Project", description: "Has runs" });
+
+    // Manually create .runs/ directory with some JSON files
+    const runsDir = join(tempDir, "projects", "run-count-project", ".runs");
+    await mkdir(runsDir, { recursive: true });
+    await writeFile(join(runsDir, "run-1.json"), "{}", "utf-8");
+    await writeFile(join(runsDir, "run-2.json"), "{}", "utf-8");
+    await writeFile(join(runsDir, "not-a-run.txt"), "ignored", "utf-8");
+
+    const res = await request(app).get("/api/projects");
+    const project = res.body.find((p: { id: string }) => p.id === "run-count-project");
+    expect(project.runCount).toBe(2);
+  });
+
+  it("returns emoji in project list summaries with custom emoji", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Emoji List", description: "Custom emoji", emoji: "\uD83D\uDE80" });
+
+    const res = await request(app).get("/api/projects");
+    const project = res.body.find((p: { id: string }) => p.id === "emoji-list");
+    expect(project.emoji).toBe("\uD83D\uDE80");
   });
 });
 
@@ -59,6 +88,7 @@ describe("POST /api/projects", () => {
     expect(res.body.id).toBe("full-stack-project");
     expect(res.body.name).toBe("Full Stack Project");
     expect(res.body.description).toBe("Builds full stack apps");
+    expect(res.body.emoji).toBe("\uD83D\uDCE6");
     expect(res.body.spec).toBe("");
     expect(res.body.teamId).toBeNull();
     expect(res.body.gitUrl).toBeNull();
@@ -107,6 +137,24 @@ describe("POST /api/projects", () => {
     expect(res.status).toBe(201);
     expect(res.body.description).toBe("");
   });
+
+  it("persists emoji when provided", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Emoji Project", description: "Has emoji", emoji: "\uD83D\uDE80" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.emoji).toBe("\uD83D\uDE80");
+  });
+
+  it("defaults emoji to package emoji when not provided", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Default Emoji", description: "No emoji field" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.emoji).toBe("\uD83D\uDCE6");
+  });
 });
 
 describe("GET /api/projects/:id", () => {
@@ -120,6 +168,7 @@ describe("GET /api/projects/:id", () => {
     expect(res.body.id).toBe("detail-project");
     expect(res.body.name).toBe("Detail Project");
     expect(res.body.description).toBe("For detail test");
+    expect(res.body.emoji).toBe("\uD83D\uDCE6");
     expect(res.body.spec).toBe("");
     expect(res.body.teamId).toBeNull();
     expect(res.body.gitUrl).toBeNull();
@@ -334,6 +383,33 @@ describe("PATCH /api/projects/:id", () => {
     expect(res.body.id).toBe("strip-fields");
     expect(res.body.name).toBe("New Name");
     expect(res.body.createdAt).toBe(originalCreatedAt);
+  });
+
+  it("updates the emoji field via PATCH", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Patch Emoji", description: "Emoji test" });
+
+    const res = await request(app)
+      .patch("/api/projects/patch-emoji")
+      .send({ emoji: "\uD83C\uDF1F" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.emoji).toBe("\uD83C\uDF1F");
+    expect(res.body.name).toBe("Patch Emoji");
+  });
+
+  it("returns 400 when emoji is not a string", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Emoji Type Check", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/emoji-type-check")
+      .send({ emoji: 123 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("emoji must be a string");
   });
 
   it("ignores unknown fields and processes valid ones", async () => {

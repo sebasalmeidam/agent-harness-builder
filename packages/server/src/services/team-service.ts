@@ -42,6 +42,7 @@ export interface TeamSummary {
   name: string;
   description: string;
   agentCount: number;
+  agentEmojis: string[];
 }
 
 // --- Slug generation ---
@@ -94,6 +95,7 @@ export async function list(): Promise<TeamSummary[]> {
         name: team.name,
         description: team.description,
         agentCount: team.agents.length,
+        agentEmojis: team.agents.map((a) => a.emoji),
       });
     } catch {
       // Skip malformed files

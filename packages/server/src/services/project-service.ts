@@ -4,6 +4,9 @@ import { homedir } from "node:os";
 import { slugify } from "./team-service.js";
 import { cloneRepository } from "./git-service.js";
 import type { CloneResult } from "./git-service.js";
+import { getRunsDir } from "./run-service.js";
+
+const DEFAULT_PROJECT_EMOJI = "\uD83D\uDCE6"; // package emoji 📦
 
 // --- Data types ---
 
@@ -11,6 +14,7 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  emoji: string;
   spec: string;
   teamId: string | null;
   gitUrl: string | null;
@@ -22,7 +26,9 @@ export interface ProjectSummary {
   id: string;
   name: string;
   description: string;
+  emoji: string;
   teamId: string | null;
+  runCount: number;
   createdAt: string;
 }
 
@@ -63,13 +69,26 @@ export async function list(): Promise<ProjectSummary[]> {
     try {
       const filePath = projectFilePath(join(projectsDir, entry));
       const content = await readFile(filePath, "utf-8");
-      const project: Project = JSON.parse(content);
+      const project = JSON.parse(content) as Record<string, unknown>;
+
+      // Count .json files in the .runs/ directory for this project
+      let runCount = 0;
+      try {
+        const runsDir = getRunsDir(entry);
+        const runFiles = await readdir(runsDir);
+        runCount = runFiles.filter((f) => f.endsWith(".json")).length;
+      } catch {
+        // .runs/ directory does not exist or is unreadable -- runCount stays 0
+      }
+
       summaries.push({
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        teamId: project.teamId,
-        createdAt: project.createdAt,
+        id: project.id as string,
+        name: project.name as string,
+        description: project.description as string,
+        emoji: (project.emoji as string) || DEFAULT_PROJECT_EMOJI,
+        teamId: project.teamId as string | null,
+        runCount,
+        createdAt: project.createdAt as string,
       });
     } catch {
       // Skip directories without valid project.json
@@ -85,7 +104,12 @@ export async function get(id: string): Promise<Project | null> {
   const filePath = projectFilePath(projDir);
   try {
     const content = await readFile(filePath, "utf-8");
-    return JSON.parse(content) as Project;
+    const project = JSON.parse(content) as Project;
+    // Backward compatibility: default emoji when missing from stored JSON
+    if (!project.emoji) {
+      project.emoji = DEFAULT_PROJECT_EMOJI;
+    }
+    return project;
   } catch {
     return null;
   }
@@ -100,6 +124,7 @@ export async function create(input: {
   name: string;
   description: string;
   gitUrl?: string;
+  emoji?: string;
 }): Promise<CreateResult> {
   const projectsDir = await ensureProjectsDir();
   const id = slugify(input.name);
@@ -132,11 +157,14 @@ export async function create(input: {
 
   const gitUrl = input.gitUrl?.trim() || null;
 
+  const emoji = input.emoji?.trim() || DEFAULT_PROJECT_EMOJI;
+
   const now = new Date().toISOString();
   const project: Project = {
     id,
     name: input.name,
     description: input.description,
+    emoji,
     spec: "",
     teamId: null,
     gitUrl,
@@ -171,6 +199,10 @@ export async function update(
   try {
     const content = await readFile(filePath, "utf-8");
     existing = JSON.parse(content) as Project;
+    // Backward compatibility: default emoji when missing from stored JSON
+    if (!existing.emoji) {
+      existing.emoji = DEFAULT_PROJECT_EMOJI;
+    }
   } catch {
     return null;
   }
