@@ -9,11 +9,13 @@ import CreateProjectPage from './pages/CreateProjectPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import DashboardPage from './pages/DashboardPage';
 import ExecutionPage from './pages/ExecutionPage';
+import LandingPage from './pages/LandingPage';
 
 function App() {
   return (
     <ErrorBoundary>
       <Routes>
+        <Route path="/landing" element={<LandingPage />} />
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="teams" element={<TeamsListPage />} />
