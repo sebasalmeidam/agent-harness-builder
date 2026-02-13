@@ -13,6 +13,8 @@ import {
 } from "@xyflow/react";
 import { Plus } from "lucide-react";
 import TeamCanvas from "../components/canvas/TeamCanvas";
+import AgentSidebar from "../components/sidebar/AgentSidebar";
+import type { AgentNodeData } from "../components/canvas/AgentNode";
 
 interface TeamAgent {
   id: string;
@@ -82,6 +84,7 @@ function TeamDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { screenToFlowPosition } = useReactFlow();
 
   useEffect(() => {
@@ -117,9 +120,41 @@ function TeamDetailContent() {
     [setEdges],
   );
 
-  const onNodeClick: NodeMouseHandler = useCallback(() => {
-    // Will be used in Phase 4 for sidebar
+  const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
+    setSelectedNodeId(node.id);
   }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
+
+  const handleAgentDataChange = useCallback(
+    (updatedData: AgentNodeData) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === selectedNodeId
+            ? { ...node, data: { ...updatedData } }
+            : node,
+        ),
+      );
+    },
+    [selectedNodeId, setNodes],
+  );
+
+  const handleDeleteAgent = useCallback(() => {
+    if (selectedNodeId === null) return;
+
+    const nodeIdToDelete = selectedNodeId;
+    setSelectedNodeId(null);
+
+    setNodes((nds) => nds.filter((node) => node.id !== nodeIdToDelete));
+    setEdges((eds) =>
+      eds.filter(
+        (edge) =>
+          edge.source !== nodeIdToDelete && edge.target !== nodeIdToDelete,
+      ),
+    );
+  }, [selectedNodeId, setNodes, setEdges]);
 
   const handleAddAgent = useCallback(() => {
     agentCounter += 1;
@@ -151,6 +186,15 @@ function TeamDetailContent() {
 
     setNodes((nds) => [...nds, newNode]);
   }, [setNodes, screenToFlowPosition]);
+
+  // Find the selected node's data for the sidebar
+  const selectedNode = selectedNodeId
+    ? nodes.find((n) => n.id === selectedNodeId)
+    : null;
+
+  const selectedAgentData = selectedNode
+    ? (selectedNode.data as AgentNodeData)
+    : null;
 
   if (loading) {
     return (
@@ -205,16 +249,29 @@ function TeamDetailContent() {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 overflow-hidden rounded-lg border border-border bg-bg-primary">
-        <TeamCanvas
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-        />
+      {/* Canvas + Sidebar flex container */}
+      <div className="flex flex-1 overflow-hidden rounded-lg border border-border bg-bg-primary">
+        {/* Canvas grows to fill available space */}
+        <div className="min-w-0 flex-1">
+          <TeamCanvas
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+          />
+        </div>
+
+        {/* Sidebar: fixed 320px, pushed from right */}
+        {selectedAgentData && (
+          <AgentSidebar
+            data={selectedAgentData}
+            onChange={handleAgentDataChange}
+            onClose={handleCloseSidebar}
+            onDelete={handleDeleteAgent}
+          />
+        )}
       </div>
 
       {/* Actions bar */}
