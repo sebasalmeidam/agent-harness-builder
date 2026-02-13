@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Save, Trash2, Users } from "lucide-react";
+import { Save, Trash2, Users, Play } from "lucide-react";
 import AssignTeamModal from "../components/AssignTeamModal";
 
 interface Project {
@@ -42,6 +42,10 @@ export default function ProjectDetailPage() {
 
   // Modal state
   const [showAssignModal, setShowAssignModal] = useState(false);
+
+  // Run trigger state
+  const [triggering, setTriggering] = useState(false);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
 
   // Fetch project data
   useEffect(() => {
@@ -187,6 +191,33 @@ export default function ProjectDetailPage() {
     },
     [project],
   );
+
+  const handleRunTeam = useCallback(async () => {
+    if (!project) return;
+
+    setTriggering(true);
+    setTriggerError(null);
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/runs`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? `Failed to trigger run: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      navigate(`/projects/${project.id}/runs/${data.id}`);
+    } catch (err) {
+      setTriggerError(
+        err instanceof Error ? err.message : "Failed to trigger execution",
+      );
+    } finally {
+      setTriggering(false);
+    }
+  }, [project, navigate]);
 
   if (loading) {
     return (
@@ -340,6 +371,28 @@ export default function ProjectDetailPage() {
             No team assigned to this project.
           </p>
         )}
+      </div>
+
+      {/* Run Team button */}
+      <div className="mt-6">
+        {triggerError && (
+          <div
+            className="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-2 font-body text-sm text-red-700"
+            role="alert"
+            data-testid="trigger-error"
+          >
+            {triggerError}
+          </div>
+        )}
+        <button
+          onClick={handleRunTeam}
+          disabled={!project.teamId || !spec.trim() || triggering}
+          className="inline-flex items-center gap-1.5 rounded-md bg-success px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          data-testid="run-team-button"
+        >
+          <Play className="h-4 w-4" />
+          {triggering ? "Starting..." : "Run Team"}
+        </button>
       </div>
 
       {/* Assign Team Modal */}
