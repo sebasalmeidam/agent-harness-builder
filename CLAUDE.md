@@ -30,6 +30,7 @@ See `CONTRIBUTING.md` for full format. Quick reference:
 - Title: imperative mood, max 70 chars ("Implement the...", "Fix...", "Add...")
 - Body: describe what changed with bullet points
 - One logical change per commit
+- **NEVER commit or push files under `docs/` or `.dev-docs/`.** These are local workflow artifacts (PRDs, ADRs, tracking) and are gitignored. Do not `git add` them.
 
 ## Bash Rules
 
