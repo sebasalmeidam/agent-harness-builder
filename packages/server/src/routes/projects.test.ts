@@ -220,6 +220,149 @@ describe("DELETE /api/projects/:id", () => {
   });
 });
 
+describe("PATCH /api/projects/:id", () => {
+  it("updates only the name field and preserves other fields", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Patch Name", description: "Original description" });
+
+    // Set a teamId first so we can verify it is preserved
+    await request(app)
+      .put("/api/projects/patch-name")
+      .send({ teamId: "my-team", spec: "Original spec" });
+
+    const res = await request(app)
+      .patch("/api/projects/patch-name")
+      .send({ name: "Updated Name" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("Updated Name");
+    expect(res.body.description).toBe("Original description");
+    expect(res.body.teamId).toBe("my-team");
+    expect(res.body.spec).toBe("Original spec");
+    expect(res.body.id).toBe("patch-name");
+  });
+
+  it("updates only the teamId field and preserves other fields", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Patch Team", description: "Team test" });
+
+    const res = await request(app)
+      .patch("/api/projects/patch-team")
+      .send({ teamId: "new-team" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.teamId).toBe("new-team");
+    expect(res.body.name).toBe("Patch Team");
+    expect(res.body.description).toBe("Team test");
+  });
+
+  it("returns 400 when name is a number", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Type Check", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/type-check")
+      .send({ name: 123 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("name must be a non-empty string");
+  });
+
+  it("returns 400 when description is a boolean", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Bool Check", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/bool-check")
+      .send({ description: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("description must be a string");
+  });
+
+  it("returns 404 for a nonexistent project", async () => {
+    const res = await request(app)
+      .patch("/api/projects/nonexistent")
+      .send({ name: "Ghost" });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Project not found" });
+  });
+
+  it("returns 400 when body is empty object", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Empty Body", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/empty-body")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("at least one updatable field");
+  });
+
+  it("returns 400 when name is an empty string", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Empty Name", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/empty-name")
+      .send({ name: "" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("name must be a non-empty string");
+  });
+
+  it("strips non-updatable fields like id and createdAt", async () => {
+    const createRes = await request(app)
+      .post("/api/projects")
+      .send({ name: "Strip Fields", description: "Original" });
+
+    const originalCreatedAt = createRes.body.createdAt;
+
+    const res = await request(app)
+      .patch("/api/projects/strip-fields")
+      .send({ name: "New Name", id: "hacked-id", createdAt: "2000-01-01" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe("strip-fields");
+    expect(res.body.name).toBe("New Name");
+    expect(res.body.createdAt).toBe(originalCreatedAt);
+  });
+
+  it("ignores unknown fields and processes valid ones", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Unknown Fields", description: "Original" });
+
+    const res = await request(app)
+      .patch("/api/projects/unknown-fields")
+      .send({ name: "Changed", unknownField: "ignored" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("Changed");
+  });
+
+  it("returns 400 when body only contains non-updatable fields", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Only Non Updatable", description: "" });
+
+    const res = await request(app)
+      .patch("/api/projects/only-non-updatable")
+      .send({ id: "hacked", createdAt: "2000-01-01" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("at least one updatable field");
+  });
+});
+
 describe("POST /api/projects with gitUrl", () => {
   it("stores the git URL when provided and clone succeeds", async () => {
     mockCloneRepository.mockResolvedValue({ success: true });
