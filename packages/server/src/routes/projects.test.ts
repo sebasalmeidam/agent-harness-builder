@@ -1,20 +1,29 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cloneRepository } from "../services/git-service.js";
+
+vi.mock("../services/git-service.js", () => ({
+  cloneRepository: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+const mockCloneRepository = vi.mocked(cloneRepository);
 
 let tempDir: string;
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "harness-test-"));
   process.env["HARNESS_DATA_DIR"] = tempDir;
+  mockCloneRepository.mockResolvedValue({ success: true });
 });
 
 afterEach(async () => {
   delete process.env["HARNESS_DATA_DIR"];
   await rm(tempDir, { recursive: true, force: true });
+  mockCloneRepository.mockClear();
 });
 
 describe("GET /api/projects", () => {
@@ -208,5 +217,64 @@ describe("DELETE /api/projects/:id", () => {
     const res = await request(app).delete("/api/projects/nonexistent");
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Project not found" });
+  });
+});
+
+describe("POST /api/projects with gitUrl", () => {
+  it("stores the git URL when provided and clone succeeds", async () => {
+    mockCloneRepository.mockResolvedValue({ success: true });
+
+    const res = await request(app).post("/api/projects").send({
+      name: "Git Project",
+      description: "Has a repo",
+      gitUrl: "https://github.com/octocat/Hello-World.git",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.gitUrl).toBe(
+      "https://github.com/octocat/Hello-World.git",
+    );
+    expect(res.body.cloneWarning).toBeUndefined();
+    expect(mockCloneRepository).toHaveBeenCalledOnce();
+  });
+
+  it("creates project without gitUrl when not provided", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "No Git", description: "No repo" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.gitUrl).toBeNull();
+    expect(res.body.cloneWarning).toBeUndefined();
+    expect(mockCloneRepository).not.toHaveBeenCalled();
+  });
+
+  it("creates project but includes cloneWarning when clone fails", async () => {
+    mockCloneRepository.mockResolvedValue({
+      success: false,
+      error: "Repository not found",
+    });
+
+    const res = await request(app).post("/api/projects").send({
+      name: "Bad Git",
+      description: "Invalid repo",
+      gitUrl: "https://invalid.example.com/repo.git",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.gitUrl).toBe("https://invalid.example.com/repo.git");
+    expect(res.body.cloneWarning).toBe("Repository not found");
+    expect(mockCloneRepository).toHaveBeenCalledOnce();
+  });
+
+  it("ignores empty gitUrl string", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Empty Git", description: "Empty URL", gitUrl: "" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.gitUrl).toBeNull();
+    expect(res.body.cloneWarning).toBeUndefined();
+    expect(mockCloneRepository).not.toHaveBeenCalled();
   });
 });

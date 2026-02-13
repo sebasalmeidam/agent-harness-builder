@@ -2,6 +2,8 @@ import { readdir, readFile, writeFile, rename, rm, mkdir } from "node:fs/promise
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { slugify } from "./team-service.js";
+import { cloneRepository } from "./git-service.js";
+import type { CloneResult } from "./git-service.js";
 
 // --- Data types ---
 
@@ -89,10 +91,16 @@ export async function get(id: string): Promise<Project | null> {
   }
 }
 
+export interface CreateResult {
+  project: Project;
+  cloneResult?: CloneResult;
+}
+
 export async function create(input: {
   name: string;
   description: string;
-}): Promise<Project> {
+  gitUrl?: string;
+}): Promise<CreateResult> {
   const projectsDir = await ensureProjectsDir();
   const id = slugify(input.name);
 
@@ -122,6 +130,8 @@ export async function create(input: {
   // Create the project directory
   await mkdir(projDir, { recursive: true });
 
+  const gitUrl = input.gitUrl?.trim() || null;
+
   const now = new Date().toISOString();
   const project: Project = {
     id,
@@ -129,7 +139,7 @@ export async function create(input: {
     description: input.description,
     spec: "",
     teamId: null,
-    gitUrl: null,
+    gitUrl,
     createdAt: now,
     updatedAt: now,
   };
@@ -139,7 +149,14 @@ export async function create(input: {
   await writeFile(tmpPath, JSON.stringify(project, null, 2), "utf-8");
   await rename(tmpPath, filePath);
 
-  return project;
+  // Clone repository if gitUrl is provided
+  let cloneResultValue: CloneResult | undefined;
+  if (gitUrl) {
+    const workspacePath = join(projDir, "workspace");
+    cloneResultValue = await cloneRepository(gitUrl, workspacePath);
+  }
+
+  return { project, cloneResult: cloneResultValue };
 }
 
 export async function update(

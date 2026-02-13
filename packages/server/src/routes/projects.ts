@@ -16,9 +16,10 @@ router.get("/", async (_req, res) => {
 
 // POST /api/projects - Create a new project
 router.post("/", async (req, res) => {
-  const { name, description } = req.body as {
+  const { name, description, gitUrl } = req.body as {
     name?: string;
     description?: string;
+    gitUrl?: string;
   };
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -27,11 +28,18 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const project = await projectService.create({
+    const { project, cloneResult } = await projectService.create({
       name: name.trim(),
       description: typeof description === "string" ? description.trim() : "",
+      gitUrl: typeof gitUrl === "string" ? gitUrl : undefined,
     });
-    res.status(201).json(project);
+
+    const response: Record<string, unknown> = { ...project };
+    if (cloneResult && !cloneResult.success) {
+      response["cloneWarning"] = cloneResult.error ?? "Clone failed";
+    }
+
+    res.status(201).json(response);
   } catch (err) {
     if (
       err instanceof Error &&

@@ -188,4 +188,71 @@ describe("CreateProjectPage", () => {
     const cancelLink = screen.getByText("Cancel");
     expect(cancelLink.closest("a")?.getAttribute("href")).toBe("/projects");
   });
+
+  test("renders the git URL field", () => {
+    renderCreateProject();
+
+    expect(screen.getByLabelText(/Git Repository URL/)).toBeTruthy();
+    expect(
+      screen.getByPlaceholderText(
+        "https://github.com/user/repo (optional)",
+      ),
+    ).toBeTruthy();
+  });
+
+  test("submission includes gitUrl when provided", async () => {
+    const { router } = renderCreateProject();
+
+    const nameInput = screen.getByLabelText(/Project Name/);
+    fireEvent.change(nameInput, { target: { value: "Git Project" } });
+
+    const gitUrlInput = screen.getByLabelText(/Git Repository URL/);
+    fireEvent.change(gitUrlInput, {
+      target: { value: "https://github.com/octocat/Hello-World.git" },
+    });
+
+    const submitButton = screen.getByText("Create Project", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/projects/git-project");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Git Project",
+        description: "",
+        gitUrl: "https://github.com/octocat/Hello-World.git",
+      }),
+    });
+  });
+
+  test("submission works without gitUrl", async () => {
+    const { router } = renderCreateProject();
+
+    const nameInput = screen.getByLabelText(/Project Name/);
+    fireEvent.change(nameInput, { target: { value: "No Git" } });
+
+    const submitButton = screen.getByText("Create Project", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/projects/no-git");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "No Git",
+        description: "",
+      }),
+    });
+  });
 });

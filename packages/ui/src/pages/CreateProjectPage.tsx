@@ -5,6 +5,7 @@ export default function CreateProjectPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [gitUrl, setGitUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,13 +21,19 @@ export default function CreateProjectPage() {
 
     setSubmitting(true);
     try {
+      const body: Record<string, string> = {
+        name: trimmedName,
+        description: description.trim(),
+      };
+      const trimmedGitUrl = gitUrl.trim();
+      if (trimmedGitUrl) {
+        body.gitUrl = trimmedGitUrl;
+      }
+
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmedName,
-          description: description.trim(),
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -91,6 +98,23 @@ export default function CreateProjectPage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe what this project is about..."
             rows={3}
+            className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="project-git-url"
+            className="block font-body text-sm font-medium text-black"
+          >
+            Git Repository URL
+          </label>
+          <input
+            id="project-git-url"
+            type="text"
+            value={gitUrl}
+            onChange={(e) => setGitUrl(e.target.value)}
+            placeholder="https://github.com/user/repo (optional)"
             className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
