@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import ErrorCard from "../components/ErrorCard";
 
 export default function CreateProjectPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [gitUrl, setGitUrl] = useState("");
+  const [emoji, setEmoji] = useState("\uD83D\uDCE6");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -24,6 +26,7 @@ export default function CreateProjectPage() {
       const body: Record<string, string> = {
         name: trimmedName,
         description: description.trim(),
+        emoji: emoji,
       };
       const trimmedGitUrl = gitUrl.trim();
       if (trimmedGitUrl) {
@@ -62,10 +65,24 @@ export default function CreateProjectPage() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <ErrorCard message={error} />
         )}
+
+        <div>
+          <label
+            htmlFor="project-emoji"
+            className="block font-body text-sm font-medium text-black"
+          >
+            Emoji
+          </label>
+          <input
+            id="project-emoji"
+            type="text"
+            value={emoji}
+            onChange={(e) => setEmoji(e.target.value)}
+            className="mt-1 block w-20 rounded-md border border-border bg-bg-primary px-3 py-2 text-center text-[20px] leading-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
 
         <div>
           <label

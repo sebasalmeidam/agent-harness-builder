@@ -276,9 +276,7 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "No projects yet. Create your first project to get started.",
-        ),
+        screen.getByText("Create your first project"),
       ).toBeTruthy();
     });
   });
@@ -288,9 +286,7 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "No teams yet. Create your first team to get started.",
-        ),
+        screen.getByText("Create your first team"),
       ).toBeTruthy();
     });
   });
@@ -452,9 +448,7 @@ describe("DashboardPage", () => {
 
     // Teams section should still render its empty state
     expect(
-      screen.getByText(
-        "No teams yet. Create your first team to get started.",
-      ),
+      screen.getByText("Create your first team"),
     ).toBeTruthy();
   });
 
@@ -495,9 +489,65 @@ describe("DashboardPage", () => {
 
     // Projects section should still render its empty state
     expect(
-      screen.getByText(
-        "No projects yet. Create your first project to get started.",
-      ),
+      screen.getByText("Create your first project"),
     ).toBeTruthy();
+  });
+
+  test("shows + New Project dashed card when projects exist", async () => {
+    fetchMock.mockImplementation((url: string | URL | Request) => {
+      const urlStr = typeof url === "string" ? url : url.toString();
+
+      if (urlStr.endsWith("/api/projects")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(sampleProjects), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (urlStr.endsWith("/api/teams")) {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
+      );
+    });
+
+    const { router } = renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Project Alpha")).toBeTruthy();
+    });
+
+    // The "+ New Project" dashed card appears after project cards
+    const newProjectCard = screen.getByText("+ New Project");
+    expect(newProjectCard).toBeTruthy();
+
+    // Clicking it navigates to /projects/new
+    newProjectCard.click();
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/projects/new");
+    });
+  });
+
+  test("empty state project card does not show + New Project card", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Create your first project"),
+      ).toBeTruthy();
+    });
+
+    // The "+ New Project" card should NOT appear in empty state
+    expect(screen.queryByText("+ New Project")).toBeNull();
   });
 });

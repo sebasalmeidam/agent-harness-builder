@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
+import ErrorCard from "../components/ErrorCard";
 
 interface ProjectSummary {
   id: string;
@@ -99,9 +100,7 @@ export default function DashboardPage() {
         </div>
 
         {projectsError && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <p>{projectsError}</p>
-          </div>
+          <ErrorCard message={projectsError} className="mt-4" />
         )}
 
         {projectsLoading && !projectsError && (
@@ -111,9 +110,16 @@ export default function DashboardPage() {
         )}
 
         {!projectsLoading && !projectsError && projects.length === 0 && (
-          <p className="mt-4 font-body text-sm text-text-secondary">
-            No projects yet. Create your first project to get started.
-          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              to="/projects/new"
+              className="flex min-h-[120px] items-center justify-center rounded-lg border-2 border-dashed border-border p-5 transition-shadow hover:shadow-md"
+            >
+              <span className="font-body text-sm text-text-secondary">
+                Create your first project
+              </span>
+            </Link>
+          </div>
         )}
 
         {!projectsLoading && !projectsError && projects.length > 0 && (
@@ -143,6 +149,14 @@ export default function DashboardPage() {
                 </div>
               </Link>
             ))}
+            <Link
+              to="/projects/new"
+              className="flex min-h-[120px] items-center justify-center rounded-lg border-2 border-dashed border-border p-5 transition-shadow hover:shadow-md"
+            >
+              <span className="font-body text-sm text-text-secondary">
+                + New Project
+              </span>
+            </Link>
           </div>
         )}
       </section>
@@ -163,9 +177,7 @@ export default function DashboardPage() {
         </div>
 
         {teamsError && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <p>{teamsError}</p>
-          </div>
+          <ErrorCard message={teamsError} className="mt-4" />
         )}
 
         {teamsLoading && !teamsError && (
@@ -175,9 +187,16 @@ export default function DashboardPage() {
         )}
 
         {!teamsLoading && !teamsError && teams.length === 0 && (
-          <p className="mt-4 font-body text-sm text-text-secondary">
-            No teams yet. Create your first team to get started.
-          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              to="/teams/new"
+              className="flex min-h-[120px] items-center justify-center rounded-lg border-2 border-dashed border-border p-5 transition-shadow hover:shadow-md"
+            >
+              <span className="font-body text-sm text-text-secondary">
+                Create your first team
+              </span>
+            </Link>
+          </div>
         )}
 
         {!teamsLoading && !teamsError && teams.length > 0 && (

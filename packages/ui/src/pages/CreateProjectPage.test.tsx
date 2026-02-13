@@ -68,10 +68,18 @@ describe("CreateProjectPage", () => {
     renderCreateProject();
 
     expect(screen.getByRole("heading", { name: "Create Project" })).toBeTruthy();
+    expect(screen.getByLabelText(/Emoji/)).toBeTruthy();
     expect(screen.getByLabelText(/Project Name/)).toBeTruthy();
     expect(screen.getByLabelText(/Description/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create Project" })).toBeTruthy();
     expect(screen.getByText("Cancel")).toBeTruthy();
+  });
+
+  test("emoji field has default package emoji", () => {
+    renderCreateProject();
+
+    const emojiInput = screen.getByLabelText(/Emoji/) as HTMLInputElement;
+    expect(emojiInput.value).toBe("\uD83D\uDCE6");
   });
 
   test("validates name is required on submit", async () => {
@@ -126,13 +134,14 @@ describe("CreateProjectPage", () => {
       expect(router.state.location.pathname).toBe("/projects/my-new-project");
     });
 
-    // Verify the correct data was sent
+    // Verify the correct data was sent (includes default emoji)
     expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "My New Project",
         description: "A great project",
+        emoji: "\uD83D\uDCE6",
       }),
     });
   });
@@ -226,6 +235,7 @@ describe("CreateProjectPage", () => {
       body: JSON.stringify({
         name: "Git Project",
         description: "",
+        emoji: "\uD83D\uDCE6",
         gitUrl: "https://github.com/octocat/Hello-World.git",
       }),
     });
@@ -252,6 +262,36 @@ describe("CreateProjectPage", () => {
       body: JSON.stringify({
         name: "No Git",
         description: "",
+        emoji: "\uD83D\uDCE6",
+      }),
+    });
+  });
+
+  test("submission includes custom emoji when changed", async () => {
+    const { router } = renderCreateProject();
+
+    const emojiInput = screen.getByLabelText(/Emoji/);
+    fireEvent.change(emojiInput, { target: { value: "\uD83D\uDE80" } });
+
+    const nameInput = screen.getByLabelText(/Project Name/);
+    fireEvent.change(nameInput, { target: { value: "Rocket Project" } });
+
+    const submitButton = screen.getByText("Create Project", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/projects/rocket-project");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Rocket Project",
+        description: "",
+        emoji: "\uD83D\uDE80",
       }),
     });
   });
