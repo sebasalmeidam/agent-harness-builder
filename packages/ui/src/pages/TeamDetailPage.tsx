@@ -8,13 +8,16 @@ import {
   addEdge,
   type Connection,
   type NodeMouseHandler,
+  type EdgeMouseHandler,
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
 import { Plus } from "lucide-react";
 import TeamCanvas from "../components/canvas/TeamCanvas";
 import AgentSidebar from "../components/sidebar/AgentSidebar";
+import EdgeSidebar from "../components/sidebar/EdgeSidebar";
 import type { AgentNodeData } from "../components/canvas/AgentNode";
+import type { WorkflowEdgeData } from "../components/canvas/WorkflowEdge";
 
 interface TeamAgent {
   id: string;
@@ -66,6 +69,7 @@ function teamEdgesToFlowEdges(teamEdges: TeamEdge[]): Edge[] {
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    type: "workflow",
     label: edge.label,
     data: {
       type: edge.type,
@@ -74,6 +78,12 @@ function teamEdgesToFlowEdges(teamEdges: TeamEdge[]): Edge[] {
     },
   }));
 }
+
+const EDGE_TYPE_LABELS: Record<string, string> = {
+  "passes-work-to": "passes work to",
+  reviews: "reviews",
+  "escalates-to": "escalates to",
+};
 
 let agentCounter = 0;
 
@@ -85,6 +95,7 @@ function TeamDetailContent() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const { screenToFlowPosition } = useReactFlow();
 
   useEffect(() => {
@@ -115,17 +126,38 @@ function TeamDetailContent() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(connection, eds));
+      const newEdge = {
+        ...connection,
+        type: "workflow",
+        data: {
+          type: "passes-work-to",
+          failureRouting: null,
+          gate: null,
+        },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
     },
     [setEdges],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+  }, []);
+
+  const onEdgeClick: EdgeMouseHandler = useCallback((_event, edge) => {
+    setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
+  }, []);
+
+  const handlePaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   }, []);
 
   const handleCloseSidebar = useCallback(() => {
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   }, []);
 
   const handleAgentDataChange = useCallback(
@@ -139,6 +171,23 @@ function TeamDetailContent() {
       );
     },
     [selectedNodeId, setNodes],
+  );
+
+  const handleEdgeDataChange = useCallback(
+    (updatedData: WorkflowEdgeData) => {
+      setEdges((eds) =>
+        eds.map((edge) =>
+          edge.id === selectedEdgeId
+            ? {
+                ...edge,
+                label: EDGE_TYPE_LABELS[updatedData.type] ?? updatedData.type,
+                data: { ...updatedData },
+              }
+            : edge,
+        ),
+      );
+    },
+    [selectedEdgeId, setEdges],
   );
 
   const handleDeleteAgent = useCallback(() => {
@@ -155,6 +204,15 @@ function TeamDetailContent() {
       ),
     );
   }, [selectedNodeId, setNodes, setEdges]);
+
+  const handleDeleteEdge = useCallback(() => {
+    if (selectedEdgeId === null) return;
+
+    const edgeIdToDelete = selectedEdgeId;
+    setSelectedEdgeId(null);
+
+    setEdges((eds) => eds.filter((edge) => edge.id !== edgeIdToDelete));
+  }, [selectedEdgeId, setEdges]);
 
   const handleAddAgent = useCallback(() => {
     agentCounter += 1;
@@ -194,6 +252,15 @@ function TeamDetailContent() {
 
   const selectedAgentData = selectedNode
     ? (selectedNode.data as AgentNodeData)
+    : null;
+
+  // Find the selected edge's data for the sidebar
+  const selectedEdge = selectedEdgeId
+    ? edges.find((e) => e.id === selectedEdgeId)
+    : null;
+
+  const selectedEdgeData = selectedEdge
+    ? (selectedEdge.data as WorkflowEdgeData)
     : null;
 
   if (loading) {
@@ -260,16 +327,28 @@ function TeamDetailContent() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
+            onPaneClick={handlePaneClick}
           />
         </div>
 
-        {/* Sidebar: fixed 320px, pushed from right */}
+        {/* Agent Sidebar: fixed 320px, pushed from right */}
         {selectedAgentData && (
           <AgentSidebar
             data={selectedAgentData}
             onChange={handleAgentDataChange}
             onClose={handleCloseSidebar}
             onDelete={handleDeleteAgent}
+          />
+        )}
+
+        {/* Edge Sidebar: fixed 320px, pushed from right */}
+        {selectedEdgeData && (
+          <EdgeSidebar
+            data={selectedEdgeData}
+            onChange={handleEdgeDataChange}
+            onClose={handleCloseSidebar}
+            onDelete={handleDeleteEdge}
           />
         )}
       </div>
