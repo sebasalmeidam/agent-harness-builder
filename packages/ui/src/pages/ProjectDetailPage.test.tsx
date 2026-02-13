@@ -134,6 +134,24 @@ beforeEach(() => {
       );
     }
 
+    // PATCH /api/projects/:id
+    if (urlStr.includes("/api/projects/") && method === "PATCH") {
+      const patchBody = JSON.parse(init?.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...mockProject,
+            ...patchBody,
+            updatedAt: new Date().toISOString(),
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+
     // DELETE /api/projects/:id
     if (urlStr.includes("/api/projects/") && method === "DELETE") {
       return Promise.resolve(new Response(null, { status: 204 }));
@@ -204,12 +222,16 @@ describe("ProjectDetailPage", () => {
     renderProjectDetail("test-project");
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "Test Project" }),
-      ).toBeTruthy();
+      const nameInput = screen.getByLabelText(
+        "Project name",
+      ) as HTMLInputElement;
+      expect(nameInput.value).toBe("Test Project");
     });
 
-    expect(screen.getByText("A test project description")).toBeTruthy();
+    const descInput = screen.getByLabelText(
+      "Project description",
+    ) as HTMLInputElement;
+    expect(descInput.value).toBe("A test project description");
     expect(screen.getByText("Projects")).toBeTruthy();
   });
 
@@ -218,9 +240,8 @@ describe("ProjectDetailPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Projects")).toBeTruthy();
-      // Project name in breadcrumb (non-link)
-      const breadcrumbName = screen.getAllByText("Test Project");
-      expect(breadcrumbName.length).toBeGreaterThan(0);
+      // Project name in breadcrumb (non-link span)
+      expect(screen.getByText("Test Project")).toBeTruthy();
     });
   });
 
@@ -502,5 +523,229 @@ describe("Past Executions", () => {
     });
 
     expect(screen.getByText("No past executions yet.")).toBeTruthy();
+  });
+});
+
+describe("Inline editing", () => {
+  test("name input renders with current project name value", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      const nameInput = screen.getByLabelText(
+        "Project name",
+      ) as HTMLInputElement;
+      expect(nameInput.value).toBe("Test Project");
+    });
+  });
+
+  test("description input renders with current project description value", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      const descInput = screen.getByLabelText(
+        "Project description",
+      ) as HTMLInputElement;
+      expect(descInput.value).toBe("A test project description");
+    });
+  });
+
+  test("editing name and blurring triggers PATCH call with only name field", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project name")).toBeTruthy();
+    });
+
+    const nameInput = screen.getByLabelText(
+      "Project name",
+    ) as HTMLInputElement;
+    fireEvent.change(nameInput, {
+      target: { value: "Updated Project Name" },
+    });
+    fireEvent.blur(nameInput);
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[1]?.method === "PATCH",
+      );
+      expect(patchCall).toBeTruthy();
+      const body = JSON.parse(patchCall![1]!.body as string);
+      expect(body).toEqual({ name: "Updated Project Name" });
+    });
+  });
+
+  test("editing description and blurring triggers PATCH call with only description field", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project description")).toBeTruthy();
+    });
+
+    const descInput = screen.getByLabelText(
+      "Project description",
+    ) as HTMLInputElement;
+    fireEvent.change(descInput, { target: { value: "New description" } });
+    fireEvent.blur(descInput);
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[1]?.method === "PATCH",
+      );
+      expect(patchCall).toBeTruthy();
+      const body = JSON.parse(patchCall![1]!.body as string);
+      expect(body).toEqual({ description: "New description" });
+    });
+  });
+
+  test("breadcrumb updates when name changes", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeTruthy();
+    });
+
+    const nameInput = screen.getByLabelText(
+      "Project name",
+    ) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Renamed Project" } });
+    fireEvent.blur(nameInput);
+
+    await waitFor(() => {
+      // After PATCH response, project.name updates and breadcrumb reflects it
+      expect(screen.getByText("Renamed Project")).toBeTruthy();
+    });
+  });
+
+  test("save error displays error message", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project name")).toBeTruthy();
+    });
+
+    // Override fetch to return error for PATCH
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (urlStr.includes("/api/projects/") && method === "PATCH") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ error: "name must be a non-empty string" }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+        }
+
+        // Fallback for other requests
+        if (
+          urlStr.endsWith("/api/projects/test-project") &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockProject), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        if (urlStr.endsWith("/api/teams/my-team") && method === "GET") {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockTeam), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        if (
+          urlStr.match(/\/api\/projects\/[^/]+\/runs$/) &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      },
+    );
+
+    const nameInput = screen.getByLabelText(
+      "Project name",
+    ) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Bad Name" } });
+    fireEvent.blur(nameInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toBeTruthy();
+      expect(
+        screen.getByText("name must be a non-empty string"),
+      ).toBeTruthy();
+    });
+  });
+
+  test("blurring name without changes does not trigger PATCH", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project name")).toBeTruthy();
+    });
+
+    const nameInput = screen.getByLabelText(
+      "Project name",
+    ) as HTMLInputElement;
+    // Blur without changing value
+    fireEvent.blur(nameInput);
+
+    // Wait a tick and verify no PATCH was made
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[1]?.method === "PATCH",
+      );
+      expect(patchCall).toBeUndefined();
+    });
+  });
+
+  test("empty name reverts to previous value on blur without calling PATCH", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Project name")).toBeTruthy();
+    });
+
+    const nameInput = screen.getByLabelText(
+      "Project name",
+    ) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "  " } });
+    fireEvent.blur(nameInput);
+
+    // Should revert to original name
+    await waitFor(() => {
+      expect(nameInput.value).toBe("Test Project");
+    });
+
+    // No PATCH should have been called
+    const patchCall = fetchMock.mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (call: any[]) => call[1]?.method === "PATCH",
+    );
+    expect(patchCall).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Save, Trash2, Users, Play } from "lucide-react";
 import AssignTeamModal from "../components/AssignTeamModal";
@@ -44,6 +44,12 @@ export default function ProjectDetailPage() {
   // Modal state
   const [showAssignModal, setShowAssignModal] = useState(false);
 
+  // Inline editing state for name and description
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const nameBeforeEdit = useRef("");
+  const descriptionBeforeEdit = useRef("");
+
   // Run trigger state
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
@@ -64,6 +70,10 @@ export default function ProjectDetailPage() {
         const data: Project = await res.json();
         setProject(data);
         setSpec(data.spec);
+        setEditName(data.name);
+        setEditDescription(data.description);
+        nameBeforeEdit.current = data.name;
+        descriptionBeforeEdit.current = data.description;
         setIsDirty(false);
       } catch (err) {
         setError(
@@ -122,6 +132,62 @@ export default function ProjectDetailPage() {
     },
     [],
   );
+
+  const handlePatchField = useCallback(
+    async (field: "name" | "description", value: string) => {
+      if (!project) return;
+
+      try {
+        const res = await fetch(`/api/projects/${project.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error ?? `Failed to save ${field}`);
+        }
+
+        const updated: Project = await res.json();
+        setProject(updated);
+        setEditName(updated.name);
+        setEditDescription(updated.description);
+        nameBeforeEdit.current = updated.name;
+        descriptionBeforeEdit.current = updated.description;
+      } catch (err) {
+        setSaveMessage({
+          type: "error",
+          text: err instanceof Error ? err.message : `Failed to save ${field}`,
+        });
+        // Revert to previous value on error
+        if (field === "name") {
+          setEditName(nameBeforeEdit.current);
+        } else {
+          setEditDescription(descriptionBeforeEdit.current);
+        }
+      }
+    },
+    [project],
+  );
+
+  const handleNameBlur = useCallback(() => {
+    const trimmed = editName.trim();
+    if (trimmed.length === 0) {
+      // Revert to previous value -- empty name is not allowed
+      setEditName(nameBeforeEdit.current);
+      return;
+    }
+    if (trimmed !== nameBeforeEdit.current) {
+      handlePatchField("name", trimmed);
+    }
+  }, [editName, handlePatchField]);
+
+  const handleDescriptionBlur = useCallback(() => {
+    if (editDescription !== descriptionBeforeEdit.current) {
+      handlePatchField("description", editDescription);
+    }
+  }, [editDescription, handlePatchField]);
 
   const handleSaveSpec = useCallback(async () => {
     if (!project) return;
@@ -264,14 +330,23 @@ export default function ProjectDetailPage() {
       {/* Project header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
-          <h1 className="font-heading text-[28px] font-semibold text-black">
-            {project.name}
-          </h1>
-          {project.description && (
-            <p className="mt-1 font-body text-sm text-text-secondary">
-              {project.description}
-            </p>
-          )}
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleNameBlur}
+            aria-label="Project name"
+            className="w-full border-0 bg-transparent p-0 font-heading text-[28px] font-semibold text-black focus:outline-none focus:ring-0"
+          />
+          <input
+            type="text"
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            onBlur={handleDescriptionBlur}
+            placeholder="Add a description..."
+            aria-label="Project description"
+            className="mt-1 w-full border-0 bg-transparent p-0 font-body text-sm text-text-secondary focus:outline-none focus:ring-0"
+          />
         </div>
 
         <button
