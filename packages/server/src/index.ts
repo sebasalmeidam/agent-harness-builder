@@ -1,1 +1,7 @@
-// Server entry point - placeholder for Phase 1
+import { app } from "./app.js";
+
+const port = Number(process.env["PORT"] ?? 3001);
+
+app.listen(port, () => {
+  console.log(`Server listening on http://localhost:${port}`);
+});
