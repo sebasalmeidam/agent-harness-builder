@@ -10,7 +10,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', icon: <Home size={20} />, label: 'Home' },
-  { to: '#', icon: <FolderKanban size={20} />, label: 'Projects', disabled: true },
+  { to: '/projects', icon: <FolderKanban size={20} />, label: 'Projects' },
   { to: '/teams', icon: <Users size={20} />, label: 'Teams' },
 ];
 
