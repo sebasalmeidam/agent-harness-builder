@@ -170,20 +170,39 @@ describe("startRun", () => {
     }
   });
 
-  it("rejects when ANTHROPIC_API_KEY is not set", async () => {
+  it("succeeds with simulation when ANTHROPIC_API_KEY is not set", async () => {
     delete process.env["ANTHROPIC_API_KEY"];
 
     await setupProjectWithTeam();
 
-    await expect(
-      executionService.startRun("test-project")
-    ).rejects.toThrow("ANTHROPIC_API_KEY environment variable is not set");
+    const { runId } = await executionService.startRun("test-project");
+    expect(runId).toBeDefined();
+    expect(typeof runId).toBe("string");
 
-    try {
-      await executionService.startRun("test-project");
-    } catch (err) {
-      expect((err as Error & { code: string }).code).toBe("NO_API_KEY");
-    }
+    // Subscribe to events to verify simulation produces expected output
+    const events: executionService.RunEvent[] = [];
+    const callback: executionService.RunEventCallback = (event) => {
+      events.push(event);
+    };
+    executionService.onRunEvent(runId, callback);
+
+    // Wait for simulated execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Should have received agent-status events
+    const statusEvents = events.filter((e) => e.type === "agent-status");
+    expect(statusEvents.length).toBeGreaterThan(0);
+
+    // Should have received activity events
+    const activityEvents = events.filter((e) => e.type === "activity");
+    expect(activityEvents.length).toBeGreaterThan(0);
+
+    // Should have received a run-status event (completion summary)
+    const runStatusEvents = events.filter((e) => e.type === "run-status");
+    expect(runStatusEvents.length).toBe(1);
+    expect(runStatusEvents[0]!.data["status"]).toBe("completed");
+
+    executionService.offRunEvent(runId, callback);
   });
 
   it("creates a run record with status running and all agents idle", async () => {

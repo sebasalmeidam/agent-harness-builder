@@ -49,7 +49,6 @@ const runEmitters = new Map<string, EventEmitter>();
  * @throws Error with code "NOT_FOUND" if the project does not exist.
  * @throws Error with code "NO_TEAM" if the project has no assigned team.
  * @throws Error with code "NO_SPEC" if the project spec is empty.
- * @throws Error with code "NO_API_KEY" if ANTHROPIC_API_KEY is not set.
  */
 export async function startRun(
   projectId: string
@@ -73,15 +72,6 @@ export async function startRun(
   if (!project.spec || project.spec.trim().length === 0) {
     const error = new Error("Project spec is empty");
     (error as Error & { code: string }).code = "NO_SPEC";
-    throw error;
-  }
-
-  // Check for ANTHROPIC_API_KEY
-  if (!process.env["ANTHROPIC_API_KEY"]) {
-    const error = new Error(
-      "ANTHROPIC_API_KEY environment variable is not set"
-    );
-    (error as Error & { code: string }).code = "NO_API_KEY";
     throw error;
   }
 
@@ -463,6 +453,14 @@ async function tryRealSdkExecution(
   _translatedTeam: TranslatedTeam,
   _harnessAgents: Array<{ id: string; name: string; emoji: string }>
 ): Promise<{ executed: boolean }> {
+  // Gate real SDK execution on API key presence.
+  // When the key is not set, return { executed: false } so the caller
+  // falls back to simulation. This keeps simulation running freely
+  // without requiring any credentials.
+  if (!process.env["ANTHROPIC_API_KEY"]) {
+    return { executed: false };
+  }
+
   try {
     // Dynamic import of the Claude Agent SDK
     // The SDK package (@anthropic-ai/claude-code) provides a programmatic API

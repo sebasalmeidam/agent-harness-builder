@@ -166,16 +166,17 @@ describe("POST /api/projects/:id/runs", () => {
     expect(res.body).toEqual({ error: "Project spec is empty" });
   });
 
-  it("returns 400 when ANTHROPIC_API_KEY is not set", async () => {
+  it("returns 201 and starts simulation when ANTHROPIC_API_KEY is not set", async () => {
     delete process.env["ANTHROPIC_API_KEY"];
     await setupProjectWithTeam();
 
     const res = await request(app).post("/api/projects/test-project/runs");
 
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({
-      error: "ANTHROPIC_API_KEY environment variable is not set",
-    });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+    expect(typeof res.body.id).toBe("string");
+    expect(res.body.status).toBe("running");
+    expect(res.body.startedAt).toBeDefined();
   });
 });
 

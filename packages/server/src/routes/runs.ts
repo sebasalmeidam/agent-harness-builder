@@ -48,13 +48,6 @@ router.post("/", async (req, res) => {
       res.status(400).json({ error: "Project spec is empty" });
       return;
     }
-    if (error.code === "NO_API_KEY") {
-      res.status(400).json({
-        error: "ANTHROPIC_API_KEY environment variable is not set",
-      });
-      return;
-    }
-
     console.error("Failed to trigger run:", err);
     res.status(500).json({ error: "Failed to trigger execution run" });
   }
