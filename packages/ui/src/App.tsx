@@ -1,10 +1,17 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import AppShell from './components/layout/AppShell';
+import TeamsListPage from './pages/TeamsListPage';
+
 function App() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-secondary">
-      <h1 className="font-heading text-4xl font-bold text-text-primary">
-        Agent Harness Builder
-      </h1>
-    </div>
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<Navigate to="/teams" replace />} />
+        <Route path="teams" element={<TeamsListPage />} />
+        <Route path="teams/new" element={<div>Create Team (coming soon)</div>} />
+        <Route path="teams/:id" element={<div>Team Detail (coming soon)</div>} />
+      </Route>
+    </Routes>
   );
 }
 
