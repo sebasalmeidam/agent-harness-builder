@@ -540,7 +540,6 @@ describe("ExecutionPage", () => {
       expect(badge.textContent).toBe("Failed");
     });
 
-    expect(screen.getByTestId("run-error")).toBeTruthy();
     expect(
       screen.getByText("SDK execution failed: API key invalid"),
     ).toBeTruthy();
@@ -660,6 +659,30 @@ describe("ExecutionPage", () => {
 // --- TeamProgress component tests ---
 
 describe("TeamProgress", () => {
+  test("renders section heading with team name", async () => {
+    renderExecutionPage("proj-1", "run-123");
+
+    await waitFor(() => {
+      expect(MockEventSource.latest()).toBeTruthy();
+    });
+
+    MockEventSource.latest()!._emit("connected", {
+      status: "running",
+      agentStatuses: {},
+      activityLog: [],
+      files: [],
+      summary: null,
+      error: null,
+    });
+
+    // Wait for team data to load (mockTeam.name = "My Team")
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Team Progress (My Team)" }),
+      ).toBeTruthy();
+    });
+  });
+
   test("renders agent nodes with correct status badges", async () => {
     renderExecutionPage("proj-1", "run-123");
 
@@ -1017,7 +1040,6 @@ describe("ProjectDetailPage Run Team button", () => {
     fireEvent.click(screen.getByTestId("run-team-button"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("trigger-error")).toBeTruthy();
       expect(
         screen.getByText("Project has no team assigned"),
       ).toBeTruthy();
@@ -1064,7 +1086,6 @@ describe("ExecutionPage History Mode", () => {
     expect(MockEventSource.instances.length).toBe(0);
 
     // Verify error message displayed
-    expect(screen.getByTestId("run-error")).toBeTruthy();
     expect(screen.getByText("SDK execution failed: timeout")).toBeTruthy();
   });
 

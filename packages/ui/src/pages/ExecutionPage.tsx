@@ -95,6 +95,9 @@ export default function ExecutionPage() {
   // Agent info for team progress display
   const [agents, setAgents] = useState<AgentInfo[]>([]);
 
+  // Team name for section title
+  const [teamName, setTeamName] = useState<string>("");
+
   // Running duration counter
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -156,6 +159,7 @@ export default function ExecutionPage() {
             const teamRes = await fetch(`/api/teams/${data.teamId}`);
             if (teamRes.ok) {
               const teamData = await teamRes.json();
+              setTeamName(teamData.name ?? "");
               const agentInfos: AgentInfo[] = (teamData.agents ?? []).map(
                 (a: { id: string; name: string; emoji: string }) => ({
                   id: a.id,
@@ -296,15 +300,15 @@ export default function ExecutionPage() {
 
       {/* Team Progress */}
       <section className="mb-6">
-        <h2 className="mb-3 font-heading text-lg font-semibold text-black">
-          Team Progress
+        <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+          {teamName ? `Team Progress (${teamName})` : "Team Progress"}
         </h2>
         <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
       </section>
 
       {/* Activity Log */}
       <section className="mb-6">
-        <h2 className="mb-3 font-heading text-lg font-semibold text-black">
+        <h2 className="mb-3 font-heading text-xl font-semibold text-black">
           Activity Log
         </h2>
         <ActivityLog entries={activeState.activityLog} />
@@ -314,7 +318,7 @@ export default function ExecutionPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Files */}
         <section>
-          <h2 className="mb-3 font-heading text-lg font-semibold text-black">
+          <h2 className="mb-3 font-heading text-xl font-semibold text-black">
             Files Changed
           </h2>
           <FileList files={activeState.files} />
@@ -323,7 +327,7 @@ export default function ExecutionPage() {
         {/* Summary (only when run is completed) */}
         {activeState.summary && (
           <section>
-            <h2 className="mb-3 font-heading text-lg font-semibold text-black">
+            <h2 className="mb-3 font-heading text-xl font-semibold text-black">
               Summary
             </h2>
             <ExecutionSummaryCard summary={activeState.summary} />

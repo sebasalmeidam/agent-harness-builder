@@ -49,7 +49,8 @@ function getStatusBadge(status: AgentStatus): {
 
 /**
  * Horizontal flow of agent nodes with arrows between them.
- * Each node shows emoji, name, and status badge with design system colors.
+ * Each node shows a vertical column: 40x40 emoji avatar, name below,
+ * and status badge below name, per design-system.md Agent Node spec.
  */
 export default function TeamProgress({
   agents,
@@ -73,30 +74,31 @@ export default function TeamProgress({
         const badge = getStatusBadge(status);
 
         return (
-          <div key={agent.id} className="flex items-center gap-3">
-            {/* Agent node card */}
+          <div key={agent.id} className="flex items-center gap-2">
+            {/* Agent node: vertical column layout */}
             <div
-              className="flex items-center gap-2 rounded-lg border border-border bg-bg-primary px-4 py-3"
+              className="flex flex-col items-center gap-1"
               data-testid={`agent-node-${agent.id}`}
             >
-              <span className="text-lg">{agent.emoji}</span>
-              <div>
-                <p className="font-body text-sm font-medium text-black">
-                  {agent.name}
-                </p>
-                <span
-                  className={`inline-block rounded-full px-2 py-0.5 font-body text-xs font-medium ${badge.className}`}
-                  data-testid={`agent-status-${agent.id}`}
-                >
-                  {badge.label}
-                </span>
+              {/* 40x40 rounded emoji avatar */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-secondary text-xl">
+                {agent.emoji}
               </div>
+              <p className="font-body text-sm font-medium">
+                {agent.name}
+              </p>
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 font-body text-xs font-medium ${badge.className}`}
+                data-testid={`agent-status-${agent.id}`}
+              >
+                {badge.label}
+              </span>
             </div>
 
             {/* Arrow between agents (not after the last one) */}
             {index < agents.length - 1 && (
               <span
-                className="font-body text-lg text-text-secondary"
+                className="text-lg text-text-muted"
                 aria-hidden="true"
               >
                 &rarr;
