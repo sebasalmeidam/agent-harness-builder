@@ -301,3 +301,211 @@ describe("GET /api/teams/:id/harness", () => {
     expect(res.body).toEqual({ error: "Team has no agents" });
   });
 });
+
+describe("POST /api/teams/import", () => {
+  const validHarness = {
+    harnessVersion: "1.0",
+    name: "Imported Team",
+    description: "A team from harness import",
+    agents: [
+      {
+        id: "agent-a",
+        name: "Planner",
+        emoji: "\uD83D\uDCCB",
+        role: "project-planner",
+        goal: "Plan the project",
+        skills: ["Planning", "Coordination"],
+        practices: ["Agile"],
+        position: { x: 50, y: 100 },
+      },
+      {
+        id: "agent-b",
+        name: "Builder",
+        emoji: "\uD83D\uDEE0\uFE0F",
+        role: "software-developer",
+        goal: "Build features",
+        skills: ["TypeScript"],
+        practices: ["TDD"],
+        position: { x: 250, y: 100 },
+      },
+    ],
+    edges: [
+      {
+        id: "edge-a",
+        source: "agent-a",
+        target: "agent-b",
+        type: "passes-work-to",
+        label: "Assign task",
+        failureRouting: null,
+        gate: { type: "manual" },
+      },
+    ],
+  };
+
+  it("creates a team from a valid harness and returns 201", async () => {
+    const res = await request(app)
+      .post("/api/teams/import")
+      .send(validHarness);
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe("imported-team");
+    expect(res.body.name).toBe("Imported Team");
+    expect(res.body.description).toBe("A team from harness import");
+    expect(res.body.agents).toHaveLength(2);
+    expect(res.body.agents[0]).toEqual({
+      id: "agent-a",
+      name: "Planner",
+      emoji: "\uD83D\uDCCB",
+      role: "project-planner",
+      goal: "Plan the project",
+      skills: ["Planning", "Coordination"],
+      practices: ["Agile"],
+      position: { x: 50, y: 100 },
+    });
+    expect(res.body.agents[1]).toEqual({
+      id: "agent-b",
+      name: "Builder",
+      emoji: "\uD83D\uDEE0\uFE0F",
+      role: "software-developer",
+      goal: "Build features",
+      skills: ["TypeScript"],
+      practices: ["TDD"],
+      position: { x: 250, y: 100 },
+    });
+    expect(res.body.edges).toHaveLength(1);
+    expect(res.body.edges[0]).toEqual({
+      id: "edge-a",
+      source: "agent-a",
+      target: "agent-b",
+      type: "passes-work-to",
+      label: "Assign task",
+      failureRouting: null,
+      gate: { type: "manual" },
+    });
+  });
+
+  it("returns 400 when harnessVersion is missing", async () => {
+    const res = await request(app)
+      .post("/api/teams/import")
+      .send({
+        name: "Bad Harness",
+        description: "",
+        agents: [{ id: "a", name: "Agent", emoji: "", role: "", goal: "", skills: [], practices: [], position: { x: 0, y: 0 } }],
+        edges: [],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("harnessVersion");
+  });
+
+  it("returns 400 when agents array is empty", async () => {
+    const res = await request(app)
+      .post("/api/teams/import")
+      .send({
+        harnessVersion: "1.0",
+        name: "No Agents Harness",
+        description: "",
+        agents: [],
+        edges: [],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("at least one agent");
+  });
+
+  it("returns 409 when team name already exists", async () => {
+    // Create a team first
+    await request(app)
+      .post("/api/teams")
+      .send({ name: "Imported Team", description: "Already exists" });
+
+    // Try to import a harness with the same name
+    const res = await request(app)
+      .post("/api/teams/import")
+      .send(validHarness);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "A team with this name already exists" });
+  });
+
+  it("round-trip: export then import produces equivalent team data", async () => {
+    // Step 1: Create a team with agents and edges
+    await request(app)
+      .post("/api/teams")
+      .send({ name: "Round Trip Team", description: "Testing round-trip" });
+
+    const agents = [
+      {
+        id: "rt-agent-1",
+        name: "Analyst",
+        emoji: "\uD83D\uDD0D",
+        role: "business-analyst",
+        goal: "Analyze requirements",
+        skills: ["Analysis", "Documentation"],
+        practices: ["BDD", "Story mapping"],
+        position: { x: 100, y: 150 },
+      },
+      {
+        id: "rt-agent-2",
+        name: "Developer",
+        emoji: "\uD83D\uDC68\u200D\uD83D\uDCBB",
+        role: "software-developer",
+        goal: "Implement features",
+        skills: ["TypeScript", "React"],
+        practices: ["TDD"],
+        position: { x: 300, y: 150 },
+      },
+    ];
+
+    const edges = [
+      {
+        id: "rt-edge-1",
+        source: "rt-agent-1",
+        target: "rt-agent-2",
+        type: "passes-work-to",
+        label: "Hand off specs",
+        failureRouting: "loop-back",
+        gate: { type: "auto" },
+      },
+    ];
+
+    await request(app)
+      .put("/api/teams/round-trip-team")
+      .send({
+        id: "round-trip-team",
+        name: "Round Trip Team",
+        description: "Testing round-trip",
+        agents,
+        edges,
+      });
+
+    // Step 2: Export the harness
+    const exportRes = await request(app).get("/api/teams/round-trip-team/harness");
+    expect(exportRes.status).toBe(200);
+    const harness = exportRes.body;
+
+    // Step 3: Import with a different name to avoid conflict
+    harness.name = "Round Trip Imported";
+    const importRes = await request(app)
+      .post("/api/teams/import")
+      .send(harness);
+
+    expect(importRes.status).toBe(201);
+    const importedTeam = importRes.body;
+
+    // Step 4: Verify equivalent data (agents and edges match)
+    expect(importedTeam.agents).toHaveLength(agents.length);
+    for (let i = 0; i < agents.length; i++) {
+      expect(importedTeam.agents[i]).toEqual(agents[i]);
+    }
+
+    expect(importedTeam.edges).toHaveLength(edges.length);
+    for (let i = 0; i < edges.length; i++) {
+      expect(importedTeam.edges[i]).toEqual(edges[i]);
+    }
+
+    // Verify the imported team has the new name but same structure
+    expect(importedTeam.name).toBe("Round Trip Imported");
+    expect(importedTeam.id).toBe("round-trip-imported");
+  });
+});

@@ -40,6 +40,25 @@ router.post("/", async (req, res) => {
   }
 });
 
+// POST /api/teams/import - Import a harness to create a new team
+router.post("/import", async (req, res) => {
+  try {
+    const team = await harnessService.importHarness(req.body);
+    res.status(201).json(team);
+  } catch (err) {
+    if (err instanceof Error && (err as Error & { code: string }).code === "INVALID_HARNESS") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof Error && (err as Error & { code: string }).code === "DUPLICATE") {
+      res.status(409).json({ error: "A team with this name already exists" });
+      return;
+    }
+    console.error("Failed to import harness:", err);
+    res.status(500).json({ error: "Failed to import harness" });
+  }
+});
+
 // GET /api/teams/:id - Get a single team
 router.get("/:id", async (req, res) => {
   try {

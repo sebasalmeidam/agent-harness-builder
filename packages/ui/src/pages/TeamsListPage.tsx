@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Trash2, Upload } from "lucide-react";
 
 interface TeamSummary {
   id: string;
@@ -9,11 +9,23 @@ interface TeamSummary {
   agentCount: number;
 }
 
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
+}
+
 export default function TeamsListPage() {
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   async function fetchTeams() {
     setLoading(true);
@@ -56,6 +68,59 @@ export default function TeamsListPage() {
     }
   }
 
+  function handleImportClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset the input so the same file can be re-selected
+    e.target.value = "";
+
+    setImporting(true);
+    setError(null);
+
+    try {
+      const text = await readFileAsText(file);
+      let harness: unknown;
+      try {
+        harness = JSON.parse(text);
+      } catch {
+        setError("Invalid JSON file");
+        setImporting(false);
+        return;
+      }
+
+      const res = await fetch("/api/teams/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(harness),
+      });
+
+      if (res.status === 409) {
+        setError("A team with this name already exists");
+        setImporting(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? "Failed to import harness");
+        setImporting(false);
+        return;
+      }
+
+      const team = await res.json();
+      navigate(`/teams/${team.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import harness");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="font-heading text-[28px] font-semibold text-black">
@@ -90,6 +155,26 @@ export default function TeamsListPage() {
             <Plus className="mb-2 h-8 w-8" />
             <span className="font-body text-sm font-medium">New Team</span>
           </Link>
+
+          {/* Import Harness card */}
+          <button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="flex min-h-[140px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-bg-primary p-6 text-text-secondary transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            <Upload className="mb-2 h-8 w-8" />
+            <span className="font-body text-sm font-medium">
+              {importing ? "Importing..." : "Import Harness"}
+            </span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.harness.json"
+            onChange={handleFileSelected}
+            className="hidden"
+            data-testid="import-file-input"
+          />
 
           {/* Team cards */}
           {teams.map((team) => (
