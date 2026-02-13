@@ -1,33 +1,52 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { test, expect } from 'vitest';
+import { test, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 
-test('redirects / to /teams and renders Teams heading', () => {
+beforeEach(() => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+test('redirects / to /teams and renders Teams heading', async () => {
   render(
     <MemoryRouter initialEntries={['/']}>
       <App />
     </MemoryRouter>,
   );
-  expect(screen.getByText('Teams')).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByText('Teams')).toBeTruthy();
+  });
 });
 
-test('renders Teams page when navigating to /teams', () => {
+test('renders Teams page when navigating to /teams', async () => {
   render(
     <MemoryRouter initialEntries={['/teams']}>
       <App />
     </MemoryRouter>,
   );
-  expect(screen.getByText('Teams')).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByText('Teams')).toBeTruthy();
+  });
 });
 
-test('renders sidebar navigation', () => {
+test('renders sidebar navigation', async () => {
   render(
     <MemoryRouter initialEntries={['/teams']}>
       <App />
     </MemoryRouter>,
   );
-  expect(screen.getByTitle('Home')).toBeTruthy();
-  expect(screen.getByTitle('Teams')).toBeTruthy();
-  expect(screen.getByTitle('Projects')).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByTitle('Home')).toBeTruthy();
+    expect(screen.getByTitle('Teams')).toBeTruthy();
+    expect(screen.getByTitle('Projects')).toBeTruthy();
+  });
 });
