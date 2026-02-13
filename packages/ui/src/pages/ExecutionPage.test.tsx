@@ -83,6 +83,58 @@ const mockRunResponse = {
   startedAt: "2025-01-01T00:00:00.000Z",
 };
 
+const mockCompletedRun = {
+  id: "run-completed",
+  projectId: "proj-1",
+  teamId: "team-1",
+  status: "completed",
+  startedAt: "2025-06-15T10:00:00.000Z",
+  completedAt: "2025-06-15T10:02:30.000Z",
+  agentStatuses: { "agent-1": "done", "agent-2": "done" },
+  activityLog: [
+    {
+      timestamp: "2025-06-15T10:00:05.000Z",
+      agentId: "agent-1",
+      agentEmoji: "D",
+      agentName: "Developer",
+      message: "Completed implementation",
+      type: "complete",
+    },
+  ],
+  files: ["src/app.ts", "src/utils.ts"],
+  summary: {
+    filesChanged: 2,
+    totalTime: 150,
+    iterations: 8,
+    errors: 0,
+  },
+  error: null,
+};
+
+const mockFailedRun = {
+  id: "run-failed",
+  projectId: "proj-1",
+  teamId: "team-1",
+  status: "failed",
+  startedAt: "2025-06-15T11:00:00.000Z",
+  completedAt: "2025-06-15T11:00:30.000Z",
+  agentStatuses: { "agent-1": "working" },
+  activityLog: [],
+  files: [],
+  summary: null,
+  error: "SDK execution failed: timeout",
+};
+
+const mockRunsList = [
+  {
+    id: "run-completed",
+    status: "completed",
+    startedAt: "2025-06-15T10:00:00.000Z",
+    completedAt: "2025-06-15T10:02:30.000Z",
+    error: null,
+  },
+];
+
 // --- Mock EventSource ---
 
 type EventSourceListener = (event: MessageEvent) => void;
@@ -192,6 +244,36 @@ function setupFetchMock() {
     if (urlStr.endsWith("/api/teams") && method === "GET") {
       return Promise.resolve(
         new Response(JSON.stringify(mockTeamsList), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    // GET /api/projects/:id/runs/:runId (run detail -- completed)
+    if (urlStr.includes("/runs/run-completed") && method === "GET") {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockCompletedRun), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    // GET /api/projects/:id/runs/:runId (run detail -- failed)
+    if (urlStr.includes("/runs/run-failed") && method === "GET") {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockFailedRun), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    // GET /api/projects/:id/runs (list)
+    if (urlStr.match(/\/api\/projects\/[^/]+\/runs$/) && method === "GET") {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockRunsList), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -940,5 +1022,91 @@ describe("ProjectDetailPage Run Team button", () => {
         screen.getByText("Project has no team assigned"),
       ).toBeTruthy();
     });
+  });
+});
+
+// --- ExecutionPage History Mode tests ---
+
+describe("ExecutionPage History Mode", () => {
+  test("renders completed run from REST without SSE connection", async () => {
+    renderExecutionPage("proj-1", "run-completed");
+
+    // Wait for the page to load and render the completed run data from REST
+    await waitFor(() => {
+      const badge = screen.getByTestId("run-status-badge");
+      expect(badge.textContent).toBe("Completed");
+    });
+
+    // Verify no EventSource was created (history mode uses REST, not SSE)
+    expect(MockEventSource.instances.length).toBe(0);
+
+    // Verify activity log entry from REST data
+    expect(screen.getByText("Completed implementation")).toBeTruthy();
+
+    // Verify files from REST data
+    expect(screen.getByText("src/app.ts")).toBeTruthy();
+    expect(screen.getByText("src/utils.ts")).toBeTruthy();
+
+    // Verify summary from REST data
+    expect(screen.getByTestId("execution-summary-card")).toBeTruthy();
+    expect(screen.getByTestId("stat-files-changed").textContent).toContain("2");
+  });
+
+  test("renders failed run from REST with error message", async () => {
+    renderExecutionPage("proj-1", "run-failed");
+
+    await waitFor(() => {
+      const badge = screen.getByTestId("run-status-badge");
+      expect(badge.textContent).toBe("Failed");
+    });
+
+    // Verify no EventSource was created
+    expect(MockEventSource.instances.length).toBe(0);
+
+    // Verify error message displayed
+    expect(screen.getByTestId("run-error")).toBeTruthy();
+    expect(screen.getByText("SDK execution failed: timeout")).toBeTruthy();
+  });
+
+  test("does not show connection status indicator in history mode", async () => {
+    renderExecutionPage("proj-1", "run-completed");
+
+    await waitFor(() => {
+      const badge = screen.getByTestId("run-status-badge");
+      expect(badge.textContent).toBe("Completed");
+    });
+
+    // Connection status should not be present in history mode
+    expect(screen.queryByTestId("connection-status")).toBeFalsy();
+  });
+
+  test("renders team progress with agent statuses from REST", async () => {
+    renderExecutionPage("proj-1", "run-completed");
+
+    await waitFor(() => {
+      const badge = screen.getByTestId("run-status-badge");
+      expect(badge.textContent).toBe("Completed");
+    });
+
+    // Wait for team data to load
+    await waitFor(() => {
+      expect(screen.getByText("Developer")).toBeTruthy();
+    });
+
+    // Verify agent statuses from REST data
+    expect(screen.getByTestId("agent-status-agent-1").textContent).toBe("Done");
+    expect(screen.getByTestId("agent-status-agent-2").textContent).toBe("Done");
+  });
+
+  test("falls through to SSE mode when run is still running", async () => {
+    renderExecutionPage("proj-1", "run-123");
+
+    // run-123 is not found in the mock (returns 404), so it falls to SSE mode
+    await waitFor(() => {
+      expect(MockEventSource.latest()).toBeTruthy();
+    });
+
+    // SSE should be connected
+    expect(MockEventSource.instances.length).toBe(1);
   });
 });

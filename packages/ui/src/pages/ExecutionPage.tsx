@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useExecutionSSE } from "../hooks/useExecutionSSE";
+import type { ExecutionSSEState } from "../hooks/useExecutionSSE";
 import TeamProgress from "../components/execution/TeamProgress";
 import ActivityLog from "../components/execution/ActivityLog";
 import FileList from "../components/execution/FileList";
@@ -51,9 +52,21 @@ function formatElapsed(seconds: number): string {
 }
 
 /**
+ * Determines whether a run is in a terminal state (completed or failed).
+ * Terminal runs are displayed via REST data, not SSE.
+ */
+function isTerminalStatus(status: string | null): boolean {
+  return status === "completed" || status === "failed";
+}
+
+/**
  * Main execution monitoring page.
- * Connects to the SSE endpoint and renders agent statuses, activity log,
- * file list, and completion summary.
+ *
+ * Supports two modes:
+ * - Live mode (SSE): For runs with status "running". Connects to the SSE
+ *   endpoint for real-time updates.
+ * - History mode (REST): For completed or failed runs. Fetches the full run
+ *   data from the REST endpoint without establishing an SSE connection.
  */
 export default function ExecutionPage() {
   const { id: projectId, runId } = useParams<{
@@ -61,7 +74,20 @@ export default function ExecutionPage() {
     runId: string;
   }>();
 
-  const sseState = useExecutionSSE(projectId, runId);
+  // History mode state: run data fetched via REST for completed/failed runs
+  const [historyData, setHistoryData] = useState<ExecutionSSEState | null>(
+    null,
+  );
+  const [isHistoryMode, setIsHistoryMode] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  // SSE hook: only activated when run is still "running" and initial check is done.
+  // While historyLoading is true, pass undefined to suppress SSE connection.
+  const shouldUseSSE = !isHistoryMode && !historyLoading;
+  const sseState = useExecutionSSE(
+    shouldUseSSE ? projectId : undefined,
+    shouldUseSSE ? runId : undefined,
+  );
 
   // Project name for breadcrumb
   const [projectName, setProjectName] = useState<string>("");
@@ -72,6 +98,48 @@ export default function ExecutionPage() {
   // Running duration counter
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // On mount, fetch run data via REST to determine mode
+  useEffect(() => {
+    if (!projectId || !runId) return;
+
+    async function checkRunStatus() {
+      setHistoryLoading(true);
+      try {
+        const res = await fetch(`/api/projects/${projectId}/runs/${runId}`);
+        if (!res.ok) {
+          // If run not found, fall through to SSE which will show connecting state
+          setIsHistoryMode(false);
+          setHistoryLoading(false);
+          return;
+        }
+        const data = await res.json();
+        if (isTerminalStatus(data.status)) {
+          // History mode: use REST data directly
+          setHistoryData({
+            status: data.status,
+            agentStatuses: data.agentStatuses ?? {},
+            activityLog: data.activityLog ?? [],
+            files: data.files ?? [],
+            summary: data.summary ?? null,
+            error: data.error ?? null,
+            connectionStatus: "disconnected",
+          });
+          setIsHistoryMode(true);
+        } else {
+          // Live mode: let SSE hook handle it
+          setIsHistoryMode(false);
+        }
+      } catch {
+        // On error, fall through to SSE mode
+        setIsHistoryMode(false);
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+
+    checkRunStatus();
+  }, [projectId, runId]);
 
   // Fetch project name for breadcrumb
   useEffect(() => {
@@ -107,9 +175,12 @@ export default function ExecutionPage() {
     fetchProject();
   }, [projectId]);
 
+  // The active state: either history data or SSE data
+  const activeState = isHistoryMode && historyData ? historyData : sseState;
+
   // Running duration timer
   useEffect(() => {
-    if (sseState.status === "running") {
+    if (activeState.status === "running") {
       timerRef.current = setInterval(() => {
         setElapsed((prev) => prev + 1);
       }, 1000);
@@ -125,15 +196,27 @@ export default function ExecutionPage() {
         clearInterval(timerRef.current);
       }
     };
-  }, [sseState.status]);
+  }, [activeState.status]);
 
-  const statusBadge = getRunStatusBadge(sseState.status);
+  // Show loading while determining mode
+  if (historyLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="font-body text-base text-text-secondary">
+          Loading run data...
+        </p>
+      </div>
+    );
+  }
 
-  // Connection status indicator
+  const statusBadge = getRunStatusBadge(activeState.status);
+
+  // Connection status indicator (only relevant in live mode)
+  const showConnectionStatus = !isHistoryMode;
   const connectionIndicator =
-    sseState.connectionStatus === "connected"
+    activeState.connectionStatus === "connected"
       ? "bg-success"
-      : sseState.connectionStatus === "connecting"
+      : activeState.connectionStatus === "connecting"
         ? "bg-warning animate-pulse"
         : "bg-text-secondary";
 
@@ -174,22 +257,24 @@ export default function ExecutionPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Connection status */}
-          <div className="flex items-center gap-2" data-testid="connection-status">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${connectionIndicator}`}
-            />
-            <span className="font-body text-xs text-text-secondary">
-              {sseState.connectionStatus === "connected"
-                ? "Live"
-                : sseState.connectionStatus === "connecting"
-                  ? "Connecting..."
-                  : "Disconnected"}
-            </span>
-          </div>
+          {/* Connection status (only in live mode) */}
+          {showConnectionStatus && (
+            <div className="flex items-center gap-2" data-testid="connection-status">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${connectionIndicator}`}
+              />
+              <span className="font-body text-xs text-text-secondary">
+                {activeState.connectionStatus === "connected"
+                  ? "Live"
+                  : activeState.connectionStatus === "connecting"
+                    ? "Connecting..."
+                    : "Disconnected"}
+              </span>
+            </div>
+          )}
 
           {/* Duration */}
-          {sseState.status === "running" && (
+          {activeState.status === "running" && (
             <span
               className="font-body text-sm text-text-secondary"
               data-testid="running-duration"
@@ -201,10 +286,10 @@ export default function ExecutionPage() {
       </div>
 
       {/* Error message for failed runs */}
-      {sseState.error && (
+      {activeState.error && (
         <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3">
           <p className="font-body text-sm text-red-700" data-testid="run-error">
-            {sseState.error}
+            {activeState.error}
           </p>
         </div>
       )}
@@ -214,7 +299,7 @@ export default function ExecutionPage() {
         <h2 className="mb-3 font-heading text-lg font-semibold text-black">
           Team Progress
         </h2>
-        <TeamProgress agents={agents} agentStatuses={sseState.agentStatuses} />
+        <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
       </section>
 
       {/* Activity Log */}
@@ -222,7 +307,7 @@ export default function ExecutionPage() {
         <h2 className="mb-3 font-heading text-lg font-semibold text-black">
           Activity Log
         </h2>
-        <ActivityLog entries={sseState.activityLog} />
+        <ActivityLog entries={activeState.activityLog} />
       </section>
 
       {/* Output section: Files and Summary */}
@@ -232,16 +317,16 @@ export default function ExecutionPage() {
           <h2 className="mb-3 font-heading text-lg font-semibold text-black">
             Files Changed
           </h2>
-          <FileList files={sseState.files} />
+          <FileList files={activeState.files} />
         </section>
 
         {/* Summary (only when run is completed) */}
-        {sseState.summary && (
+        {activeState.summary && (
           <section>
             <h2 className="mb-3 font-heading text-lg font-semibold text-black">
               Summary
             </h2>
-            <ExecutionSummaryCard summary={sseState.summary} />
+            <ExecutionSummaryCard summary={activeState.summary} />
           </section>
         )}
       </div>

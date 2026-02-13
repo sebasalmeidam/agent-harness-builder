@@ -159,6 +159,27 @@ beforeEach(() => {
       );
     }
 
+    // GET /api/projects/:id/runs (list runs)
+    if (urlStr.match(/\/api\/projects\/[^/]+\/runs$/) && method === "GET") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              id: "run-hist-1",
+              status: "completed",
+              startedAt: "2025-06-15T10:00:00.000Z",
+              completedAt: "2025-06-15T10:02:30.000Z",
+              error: null,
+            },
+          ]),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+
     return Promise.resolve(
       new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
@@ -397,5 +418,89 @@ describe("Delete project", () => {
       (call: any[]) => call[1]?.method === "DELETE",
     );
     expect(deleteCall).toBeFalsy();
+  });
+});
+
+describe("Past Executions", () => {
+  test("renders Past Executions heading on project detail page", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Past Executions" }),
+      ).toBeTruthy();
+    });
+  });
+
+  test("renders RunHistoryList with past runs", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("run-history-list")).toBeTruthy();
+    });
+
+    // Should show the mock run entry
+    expect(screen.getByTestId("run-entry-run-hist-1")).toBeTruthy();
+    expect(screen.getByTestId("run-status-run-hist-1").textContent).toBe(
+      "Completed",
+    );
+  });
+
+  test("renders empty state for project with no runs", async () => {
+    // Override the fetch to return empty runs for no-team-project
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (
+          urlStr.endsWith("/api/projects/no-team-project") &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockProjectNoTeam), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        if (
+          urlStr.match(/\/api\/projects\/[^/]+\/runs$/) &&
+          method === "GET"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        if (urlStr.endsWith("/api/teams") && method === "GET") {
+          return Promise.resolve(
+            new Response(JSON.stringify(mockTeamsList), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      },
+    );
+
+    renderProjectDetail("no-team-project");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("run-history-empty")).toBeTruthy();
+    });
+
+    expect(screen.getByText("No past executions yet.")).toBeTruthy();
   });
 });

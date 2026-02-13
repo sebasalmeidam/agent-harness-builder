@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Save, Trash2, Users, Play } from "lucide-react";
 import AssignTeamModal from "../components/AssignTeamModal";
+import RunHistoryList from "../components/execution/RunHistoryList";
 
 interface Project {
   id: string;
@@ -393,6 +394,14 @@ export default function ProjectDetailPage() {
           <Play className="h-4 w-4" />
           {triggering ? "Starting..." : "Run Team"}
         </button>
+      </div>
+
+      {/* Past Executions section */}
+      <div className="mt-8">
+        <h2 className="mb-3 font-heading text-lg font-semibold text-black">
+          Past Executions
+        </h2>
+        <RunHistoryList projectId={project.id} />
       </div>
 
       {/* Assign Team Modal */}
