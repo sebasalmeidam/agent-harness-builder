@@ -30,7 +30,7 @@ function formatTimestamp(iso: string): string {
 function getEntryStyle(type: ActivityEntry["type"]): string {
   switch (type) {
     case "error":
-      return "text-red-600";
+      return "text-error";
     case "handoff":
       return "text-text-primary";
     case "complete":
@@ -78,12 +78,12 @@ export default function ActivityLog({ entries }: ActivityLogProps) {
             data-testid="activity-entry"
           >
             {/* Timestamp */}
-            <span className="shrink-0 font-body text-xs text-text-secondary">
+            <span className="w-16 shrink-0 font-body text-[13px] text-text-secondary">
               {formatTimestamp(entry.timestamp)}
             </span>
 
             {/* Agent emoji */}
-            <span className="shrink-0 text-sm">{entry.agentEmoji}</span>
+            <span className="shrink-0 text-base">{entry.agentEmoji}</span>
 
             {/* Message */}
             <div className="min-w-0 flex-1">

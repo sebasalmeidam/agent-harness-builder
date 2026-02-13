@@ -788,7 +788,7 @@ describe("ActivityLog", () => {
 
     await waitFor(() => {
       const errorMsg = screen.getByText("Something went wrong");
-      expect(errorMsg.className).toContain("text-red-600");
+      expect(errorMsg.className).toContain("text-error");
     });
   });
 });
