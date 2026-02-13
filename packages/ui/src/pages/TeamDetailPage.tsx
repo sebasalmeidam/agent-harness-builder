@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, Link, useNavigate, useBlocker } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   type Node,
   type Edge,
@@ -194,22 +194,6 @@ function TeamDetailContent() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isDirty]);
-
-  // React Router navigation blocking
-  const blocker = useBlocker(isDirty);
-
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      const proceed = window.confirm(
-        "You have unsaved changes. Are you sure you want to leave?",
-      );
-      if (proceed) {
-        blocker.proceed();
-      } else {
-        blocker.reset();
-      }
-    }
-  }, [blocker]);
 
   // Clear save message after 3 seconds
   useEffect(() => {
