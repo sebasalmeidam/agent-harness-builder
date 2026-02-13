@@ -13,6 +13,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { Plus, Save, Trash2, Download } from "lucide-react";
+import ErrorCard from "../components/ErrorCard";
 import TeamCanvas from "../components/canvas/TeamCanvas";
 import AgentSidebar from "../components/sidebar/AgentSidebar";
 import EdgeSidebar from "../components/sidebar/EdgeSidebar";
@@ -520,8 +521,8 @@ function TeamDetailContent() {
   if (error) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="rounded-md border border-red-200 bg-red-50 px-6 py-4 text-center">
-          <p className="font-body text-sm text-red-700">{error}</p>
+        <div className="text-center">
+          <ErrorCard message={error} className="px-6 py-4" />
           <Link
             to="/teams"
             className="mt-3 inline-block font-body text-sm font-medium text-primary underline"

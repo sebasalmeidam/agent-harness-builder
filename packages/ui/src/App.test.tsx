@@ -35,7 +35,7 @@ test('renders Teams page when navigating to /teams', async () => {
     </MemoryRouter>,
   );
   await waitFor(() => {
-    expect(screen.getByText('Teams')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Teams' })).toBeTruthy();
   });
 });
 

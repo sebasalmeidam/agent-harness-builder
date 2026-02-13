@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
+import ErrorCard from "../components/ErrorCard";
 
 interface ProjectSummary {
   id: string;
@@ -66,15 +67,7 @@ export default function ProjectsListPage() {
       </h1>
 
       {error && (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <p>{error}</p>
-          <button
-            onClick={fetchProjects}
-            className="mt-2 text-sm font-medium text-red-800 underline"
-          >
-            Retry
-          </button>
-        </div>
+        <ErrorCard message={error} onRetry={fetchProjects} className="mt-4" />
       )}
 
       {loading && !error && (

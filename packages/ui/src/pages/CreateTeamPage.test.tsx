@@ -200,9 +200,9 @@ describe("CreateTeamPage", () => {
       ).toBeTruthy();
     });
 
-    // The error should be in the banner, not inline
+    // The error should be in the ErrorCard banner, not inline
     const errorBanner = screen.getByText("A team with this name already exists");
-    expect(errorBanner.className).toContain("text-red-700");
+    expect(errorBanner.className).toContain("text-error");
   });
 
   test("(7) cancel link points to /teams", () => {

@@ -192,7 +192,7 @@ describe("RunHistoryList", () => {
     renderRunHistoryList("proj-error");
 
     await waitFor(() => {
-      expect(screen.getByTestId("run-history-error")).toBeTruthy();
+      expect(screen.getByRole("alert")).toBeTruthy();
     });
   });
 

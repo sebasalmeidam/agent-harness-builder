@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import ErrorCard from "../components/ErrorCard";
 
 export default function CreateTeamPage() {
   const navigate = useNavigate();
@@ -50,9 +51,7 @@ export default function CreateTeamPage() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <ErrorCard message={error} />
         )}
 
         <div>
