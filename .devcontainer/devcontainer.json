@@ -5,7 +5,7 @@
     "ghcr.io/devcontainers-contrib/features/pnpm:2": {}
   },
   "postCreateCommand": "pnpm install",
-  "forwardPorts": [5173, 3001],
+  "forwardPorts": [5173, 3099],
   "customizations": {
     "vscode": {
       "extensions": [
