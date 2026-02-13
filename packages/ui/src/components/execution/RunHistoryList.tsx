@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ErrorCard from "../ErrorCard";
 
 /**
  * Lightweight run summary returned by the list endpoint.
@@ -30,7 +31,7 @@ function getStatusBadge(status: string): { label: string; className: string } {
     case "failed":
       return {
         label: "Failed",
-        className: "bg-red-100 text-red-600",
+        className: "bg-primary-light text-primary",
       };
     case "running":
       return {
@@ -167,12 +168,7 @@ export default function RunHistoryList({ projectId }: RunHistoryListProps) {
 
   if (error) {
     return (
-      <div
-        className="rounded-md border border-red-200 bg-red-50 px-4 py-2"
-        data-testid="run-history-error"
-      >
-        <p className="font-body text-sm text-red-700">{error}</p>
-      </div>
+      <ErrorCard message={error} />
     );
   }
 

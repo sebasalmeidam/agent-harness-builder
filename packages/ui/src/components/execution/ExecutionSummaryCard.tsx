@@ -53,7 +53,7 @@ export default function ExecutionSummaryCard({
       label: "Errors",
       value: summary.errors,
       testId: "stat-errors",
-      className: summary.errors > 0 ? "text-red-600" : "text-black",
+      className: summary.errors > 0 ? "text-error" : "text-black",
     },
   ];
 

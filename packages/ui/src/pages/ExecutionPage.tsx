@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
+import ErrorCard from "../components/ErrorCard";
 import { useExecutionSSE } from "../hooks/useExecutionSSE";
 import type { ExecutionSSEState } from "../hooks/useExecutionSSE";
 import TeamProgress from "../components/execution/TeamProgress";
@@ -29,7 +30,7 @@ function getRunStatusBadge(status: string | null): {
     case "failed":
       return {
         label: "Failed",
-        className: "bg-red-100 text-red-600",
+        className: "bg-primary-light text-primary",
       };
     default:
       return {
@@ -291,11 +292,7 @@ export default function ExecutionPage() {
 
       {/* Error message for failed runs */}
       {activeState.error && (
-        <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3">
-          <p className="font-body text-sm text-red-700" data-testid="run-error">
-            {activeState.error}
-          </p>
-        </div>
+        <ErrorCard message={activeState.error} className="mb-6" />
       )}
 
       {/* Team Progress */}

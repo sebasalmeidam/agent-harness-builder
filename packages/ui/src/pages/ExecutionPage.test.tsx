@@ -915,7 +915,7 @@ describe("ExecutionSummaryCard", () => {
       const errorsCard = screen.getByTestId("stat-errors");
       // The value paragraph should have red text
       const valueParagraph = errorsCard.querySelectorAll("p")[1];
-      expect(valueParagraph?.className).toContain("text-red-600");
+      expect(valueParagraph?.className).toContain("text-error");
     });
   });
 });
