@@ -10,6 +10,8 @@ const sampleProjects = [
     description: "First project",
     teamId: "team-one",
     createdAt: "2025-01-01T00:00:00.000Z",
+    emoji: "\uD83D\uDE80",
+    runCount: 5,
   },
   {
     id: "project-beta",
@@ -17,6 +19,8 @@ const sampleProjects = [
     description: "Second project",
     teamId: null,
     createdAt: "2025-01-02T00:00:00.000Z",
+    emoji: "\uD83D\uDCE6",
+    runCount: 0,
   },
 ];
 
@@ -26,12 +30,14 @@ const sampleTeams = [
     name: "Team One",
     description: "First team",
     agentCount: 3,
+    agentEmojis: ["\uD83E\uDD16", "\uD83D\uDC7E", "\uD83E\uDDD1\u200D\uD83D\uDCBB"],
   },
   {
     id: "team-two",
     name: "Team Two",
     description: "Second team",
     agentCount: 1,
+    agentEmojis: ["\uD83E\uDD16"],
   },
 ];
 
@@ -151,8 +157,13 @@ describe("DashboardPage", () => {
       expect(screen.getByText("Second project")).toBeTruthy();
     });
 
-    expect(screen.getByText("Team assigned")).toBeTruthy();
-    expect(screen.getByText("No team assigned")).toBeTruthy();
+    // Project cards show emoji
+    expect(screen.getByText("\uD83D\uDE80")).toBeTruthy();
+    expect(screen.getByText("\uD83D\uDCE6")).toBeTruthy();
+
+    // Project cards show metadata row "N teams . N runs"
+    expect(screen.getByText(/1 teams .+ 5 runs/)).toBeTruthy();
+    expect(screen.getByText(/0 teams .+ 0 runs/)).toBeTruthy();
   });
 
   test("renders team cards when teams exist", async () => {
@@ -186,13 +197,78 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Team One")).toBeTruthy();
-      expect(screen.getByText("First team")).toBeTruthy();
       expect(screen.getByText("Team Two")).toBeTruthy();
-      expect(screen.getByText("Second team")).toBeTruthy();
     });
 
+    // Team cards show agent emojis (robot emoji appears in both teams)
+    expect(screen.getAllByText("\uD83E\uDD16").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("\uD83D\uDC7E")).toBeTruthy();
+
+    // Team cards show agent count
     expect(screen.getByText("3 agents")).toBeTruthy();
     expect(screen.getByText("1 agent")).toBeTruthy();
+  });
+
+  test("team card shows overflow badge when more than 4 agents", async () => {
+    const overflowTeams = [
+      {
+        id: "team-overflow",
+        name: "Big Team",
+        description: "A large team",
+        agentCount: 6,
+        agentEmojis: [
+          "\uD83E\uDD16",
+          "\uD83D\uDC7E",
+          "\uD83E\uDDD1\u200D\uD83D\uDCBB",
+          "\uD83E\uDDB8",
+          "\uD83E\uDDD9",
+          "\uD83E\uDDDA",
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((url: string | URL | Request) => {
+      const urlStr = typeof url === "string" ? url : url.toString();
+
+      if (urlStr.endsWith("/api/projects")) {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (urlStr.endsWith("/api/teams")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(overflowTeams), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
+      );
+    });
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Big Team")).toBeTruthy();
+    });
+
+    // First 3 emojis rendered
+    expect(screen.getByText("\uD83E\uDD16")).toBeTruthy();
+    expect(screen.getByText("\uD83D\uDC7E")).toBeTruthy();
+    expect(screen.getByText("\uD83E\uDDD1\u200D\uD83D\uDCBB")).toBeTruthy();
+
+    // Overflow badge: +3 (6 total - 3 shown)
+    expect(screen.getByText("+3")).toBeTruthy();
+
+    // Agent count still shown
+    expect(screen.getByText("6 agents")).toBeTruthy();
   });
 
   test("shows empty state for projects section", async () => {

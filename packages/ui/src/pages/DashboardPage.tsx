@@ -8,6 +8,8 @@ interface ProjectSummary {
   description: string;
   teamId: string | null;
   createdAt: string;
+  emoji: string;
+  runCount: number;
 }
 
 interface TeamSummary {
@@ -15,6 +17,7 @@ interface TeamSummary {
   name: string;
   description: string;
   agentCount: number;
+  agentEmojis: string[];
 }
 
 export default function DashboardPage() {
@@ -121,17 +124,21 @@ export default function DashboardPage() {
                 to={`/projects/${project.id}`}
                 className="flex min-h-[120px] flex-col rounded-lg border border-border bg-bg-primary p-5 transition-shadow hover:shadow-md"
               >
-                <h3 className="font-heading text-lg font-semibold text-black">
+                <span className="text-[24px] leading-none">
+                  {project.emoji}
+                </span>
+                <h3 className="mt-2 font-body text-[16px] font-semibold text-black">
                   {project.name}
                 </h3>
                 {project.description && (
-                  <p className="mt-1 line-clamp-2 font-body text-sm text-text-secondary">
+                  <p className="mt-1 line-clamp-2 font-body text-[14px] font-normal text-text-secondary">
                     {project.description}
                   </p>
                 )}
                 <div className="mt-auto pt-3">
-                  <span className="font-body text-xs text-text-secondary">
-                    {project.teamId ? "Team assigned" : "No team assigned"}
+                  <span className="font-body text-[12px] font-normal text-text-muted">
+                    {project.teamId ? 1 : 0} teams &middot; {project.runCount}{" "}
+                    runs
                   </span>
                 </div>
               </Link>
@@ -181,16 +188,33 @@ export default function DashboardPage() {
                 to={`/teams/${team.id}`}
                 className="flex min-h-[120px] flex-col rounded-lg border border-border bg-bg-primary p-5 transition-shadow hover:shadow-md"
               >
-                <h3 className="font-heading text-lg font-semibold text-black">
+                {team.agentEmojis.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    {team.agentEmojis.length <= 4
+                      ? team.agentEmojis.map((emoji, i) => (
+                          <span key={i} className="text-[20px] leading-none">
+                            {emoji}
+                          </span>
+                        ))
+                      : (
+                        <>
+                          {team.agentEmojis.slice(0, 3).map((emoji, i) => (
+                            <span key={i} className="text-[20px] leading-none">
+                              {emoji}
+                            </span>
+                          ))}
+                          <span className="font-body text-[12px] font-normal text-text-muted">
+                            +{team.agentEmojis.length - 3}
+                          </span>
+                        </>
+                      )}
+                  </div>
+                )}
+                <h3 className="mt-2 font-body text-[16px] font-semibold text-black">
                   {team.name}
                 </h3>
-                {team.description && (
-                  <p className="mt-1 line-clamp-2 font-body text-sm text-text-secondary">
-                    {team.description}
-                  </p>
-                )}
                 <div className="mt-auto pt-3">
-                  <span className="font-body text-xs text-text-secondary">
+                  <span className="font-body text-[12px] font-normal text-text-muted">
                     {team.agentCount}{" "}
                     {team.agentCount === 1 ? "agent" : "agents"}
                   </span>
