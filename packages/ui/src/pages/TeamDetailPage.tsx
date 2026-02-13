@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useParams, Link, useNavigate, useBlocker } from "react-router-dom";
 import {
   type Node,
   type Edge,
@@ -12,7 +12,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { Plus } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import TeamCanvas from "../components/canvas/TeamCanvas";
 import AgentSidebar from "../components/sidebar/AgentSidebar";
 import EdgeSidebar from "../components/sidebar/EdgeSidebar";
@@ -79,6 +79,37 @@ function teamEdgesToFlowEdges(teamEdges: TeamEdge[]): Edge[] {
   }));
 }
 
+export function nodesToAgents(nodes: Node[]): TeamAgent[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    name: (node.data as AgentNodeData).name,
+    emoji: (node.data as AgentNodeData).emoji,
+    role: (node.data as AgentNodeData).role,
+    goal: (node.data as AgentNodeData).goal,
+    skills: (node.data as AgentNodeData).skills,
+    practices: (node.data as AgentNodeData).practices,
+    position: { x: node.position.x, y: node.position.y },
+  }));
+}
+
+export function flowEdgesToTeamEdges(edges: Edge[]): TeamEdge[] {
+  return edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    type: (edge.data as WorkflowEdgeData)?.type ?? "passes-work-to",
+    label:
+      (edge.label as string) ??
+      EDGE_TYPE_LABELS[
+        (edge.data as WorkflowEdgeData)?.type ?? "passes-work-to"
+      ] ??
+      "passes work to",
+    failureRouting:
+      (edge.data as WorkflowEdgeData)?.failureRouting ?? null,
+    gate: (edge.data as WorkflowEdgeData)?.gate ?? null,
+  }));
+}
+
 const EDGE_TYPE_LABELS: Record<string, string> = {
   "passes-work-to": "passes work to",
   reviews: "reviews",
@@ -89,6 +120,7 @@ let agentCounter = 0;
 
 function TeamDetailContent() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,10 +130,26 @@ function TeamDetailContent() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const { screenToFlowPosition } = useReactFlow();
 
+  // Editable metadata
+  const [editedName, setEditedName] = useState("");
+  const [editedDescription, setEditedDescription] = useState("");
+
+  // Save state
+  const [isDirty, setIsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  // Track whether initial load is complete to avoid marking dirty during load
+  const initialLoadComplete = useRef(false);
+
   useEffect(() => {
     async function fetchTeam() {
       setLoading(true);
       setError(null);
+      initialLoadComplete.current = false;
       try {
         const res = await fetch(`/api/teams/${id}`);
         if (!res.ok) {
@@ -112,8 +160,16 @@ function TeamDetailContent() {
         }
         const data: Team = await res.json();
         setTeam(data);
+        setEditedName(data.name);
+        setEditedDescription(data.description);
         setNodes(agentsToNodes(data.agents));
         setEdges(teamEdgesToFlowEdges(data.edges));
+        setIsDirty(false);
+        // Allow a tick for React Flow to process node/edge changes
+        // before we start tracking dirty state
+        setTimeout(() => {
+          initialLoadComplete.current = true;
+        }, 0);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load team");
       } finally {
@@ -123,6 +179,52 @@ function TeamDetailContent() {
 
     fetchTeam();
   }, [id, setNodes, setEdges]);
+
+  // beforeunload event for browser refresh/tab close
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty) {
+        e.preventDefault();
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty]);
+
+  // React Router navigation blocking
+  const blocker = useBlocker(isDirty);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      const proceed = window.confirm(
+        "You have unsaved changes. Are you sure you want to leave?",
+      );
+      if (proceed) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    }
+  }, [blocker]);
+
+  // Clear save message after 3 seconds
+  useEffect(() => {
+    if (saveMessage) {
+      const timer = setTimeout(() => {
+        setSaveMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveMessage]);
+
+  const markDirty = useCallback(() => {
+    if (initialLoadComplete.current) {
+      setIsDirty(true);
+    }
+  }, []);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -136,8 +238,9 @@ function TeamDetailContent() {
         },
       };
       setEdges((eds) => addEdge(newEdge, eds));
+      markDirty();
     },
-    [setEdges],
+    [setEdges, markDirty],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
@@ -169,8 +272,9 @@ function TeamDetailContent() {
             : node,
         ),
       );
+      markDirty();
     },
-    [selectedNodeId, setNodes],
+    [selectedNodeId, setNodes, markDirty],
   );
 
   const handleEdgeDataChange = useCallback(
@@ -186,8 +290,9 @@ function TeamDetailContent() {
             : edge,
         ),
       );
+      markDirty();
     },
-    [selectedEdgeId, setEdges],
+    [selectedEdgeId, setEdges, markDirty],
   );
 
   const handleDeleteAgent = useCallback(() => {
@@ -203,7 +308,8 @@ function TeamDetailContent() {
           edge.source !== nodeIdToDelete && edge.target !== nodeIdToDelete,
       ),
     );
-  }, [selectedNodeId, setNodes, setEdges]);
+    markDirty();
+  }, [selectedNodeId, setNodes, setEdges, markDirty]);
 
   const handleDeleteEdge = useCallback(() => {
     if (selectedEdgeId === null) return;
@@ -212,7 +318,8 @@ function TeamDetailContent() {
     setSelectedEdgeId(null);
 
     setEdges((eds) => eds.filter((edge) => edge.id !== edgeIdToDelete));
-  }, [selectedEdgeId, setEdges]);
+    markDirty();
+  }, [selectedEdgeId, setEdges, markDirty]);
 
   const handleAddAgent = useCallback(() => {
     agentCounter += 1;
@@ -243,7 +350,121 @@ function TeamDetailContent() {
     };
 
     setNodes((nds) => [...nds, newNode]);
-  }, [setNodes, screenToFlowPosition]);
+    markDirty();
+  }, [setNodes, screenToFlowPosition, markDirty]);
+
+  // Track node position changes (drag)
+  const handleNodesChange: typeof onNodesChange = useCallback(
+    (changes) => {
+      onNodesChange(changes);
+      const hasPositionChange = changes.some(
+        (change) => change.type === "position" && change.dragging === false,
+      );
+      if (hasPositionChange) {
+        markDirty();
+      }
+    },
+    [onNodesChange, markDirty],
+  );
+
+  // Track edge changes (deletion via keyboard)
+  const handleEdgesChange: typeof onEdgesChange = useCallback(
+    (changes) => {
+      onEdgesChange(changes);
+      const hasRemoveChange = changes.some(
+        (change) => change.type === "remove",
+      );
+      if (hasRemoveChange) {
+        markDirty();
+      }
+    },
+    [onEdgesChange, markDirty],
+  );
+
+  const handleNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEditedName(e.target.value);
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const handleDescriptionChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setEditedDescription(e.target.value);
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!team) return;
+
+    setSaving(true);
+    setSaveMessage(null);
+
+    const payload = {
+      id: team.id,
+      name: editedName,
+      description: editedDescription,
+      agents: nodesToAgents(nodes),
+      edges: flowEdgesToTeamEdges(edges),
+    };
+
+    try {
+      const res = await fetch(`/api/teams/${team.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to save team: ${res.statusText}`);
+      }
+
+      const updatedTeam: Team = await res.json();
+      setTeam(updatedTeam);
+      setEditedName(updatedTeam.name);
+      setEditedDescription(updatedTeam.description);
+      setIsDirty(false);
+      setSaveMessage({ type: "success", text: "Team saved successfully" });
+    } catch (err) {
+      setSaveMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to save team",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [team, editedName, editedDescription, nodes, edges]);
+
+  const handleDeleteTeam = useCallback(async () => {
+    if (!team) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${team.name}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/teams/${team.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete team: ${res.statusText}`);
+      }
+
+      // Clear isDirty so navigation blocker does not trigger on redirect
+      setIsDirty(false);
+      navigate("/teams");
+    } catch (err) {
+      setSaveMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete team",
+      });
+    }
+  }, [team, navigate]);
 
   // Find the selected node's data for the sidebar
   const selectedNode = selectedNodeId
@@ -301,20 +522,74 @@ function TeamDetailContent() {
           Teams
         </Link>
         <span className="mx-2">/</span>
-        <span className="text-text-primary">{team.name}</span>
+        <span className="text-text-primary">{editedName || team.name}</span>
       </nav>
 
       {/* Team header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-[28px] font-semibold text-black">
-            {team.name}
-          </h1>
-          <p className="font-body text-sm text-text-secondary">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <input
+            type="text"
+            value={editedName}
+            onChange={handleNameChange}
+            className="w-full border-b border-transparent bg-transparent font-heading text-[28px] font-semibold text-black outline-none transition-colors focus:border-primary"
+            aria-label="Team name"
+          />
+          <textarea
+            value={editedDescription}
+            onChange={handleDescriptionChange}
+            placeholder="Add a description..."
+            rows={1}
+            className="mt-1 w-full resize-none border-b border-transparent bg-transparent font-body text-sm text-text-secondary outline-none transition-colors placeholder:text-text-secondary/50 focus:border-primary"
+            aria-label="Team description"
+          />
+          <p className="mt-1 font-body text-xs text-text-secondary">
             {nodes.length} {nodes.length === 1 ? "agent" : "agents"}
+            {isDirty && (
+              <span
+                className="ml-2 inline-flex items-center gap-1 text-primary"
+                data-testid="dirty-indicator"
+              >
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+                Unsaved changes
+              </span>
+            )}
           </p>
         </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={handleDeleteTeam}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-secondary transition-colors hover:border-red-300 hover:text-red-600"
+            title="Delete team"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
       </div>
+
+      {/* Save message */}
+      {saveMessage && (
+        <div
+          className={`mb-3 rounded-md border px-4 py-2 font-body text-sm ${
+            saveMessage.type === "success"
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+          role="status"
+        >
+          {saveMessage.text}
+        </div>
+      )}
 
       {/* Canvas + Sidebar flex container */}
       <div className="flex flex-1 overflow-hidden rounded-lg border border-border bg-bg-primary">
@@ -323,8 +598,8 @@ function TeamDetailContent() {
           <TeamCanvas
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
