@@ -5,6 +5,7 @@ import CreateTeamPage from './pages/CreateTeamPage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import ProjectsListPage from './pages/ProjectsListPage';
 import CreateProjectPage from './pages/CreateProjectPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 
 function App() {
   return (
@@ -16,7 +17,7 @@ function App() {
         <Route path="teams/:id" element={<TeamDetailPage />} />
         <Route path="projects" element={<ProjectsListPage />} />
         <Route path="projects/new" element={<CreateProjectPage />} />
-        <Route path="projects/:id" element={<div>Project Detail Placeholder</div>} />
+        <Route path="projects/:id" element={<ProjectDetailPage />} />
       </Route>
     </Routes>
   );
