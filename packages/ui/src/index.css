@@ -40,3 +40,14 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 }
+
+/* Agent node handles: hidden by default, visible on node hover */
+.react-flow__node .react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
