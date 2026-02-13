@@ -32,6 +32,15 @@ See `CONTRIBUTING.md` for full format. Quick reference:
 - One logical change per commit
 - **NEVER commit or push files under `docs/` or `.dev-docs/`.** These are local workflow artifacts (PRDs, ADRs, tracking) and are gitignored. Do not `git add` them.
 
+## Available Tools
+
+See `.claude/AVAILABLE-TOOLS.md` for full reference. Quick summary:
+- **agent-browser** (CLI): Browser automation for UI validation. Use `agent-browser snapshot` for accessibility tree, `agent-browser screenshot` for visual capture, `agent-browser errors` for debugging.
+- **Exa** (MCP): Web search, code search, company research.
+- **Ref** (MCP): API documentation search (60-95% less tokens than raw docs).
+
+When stuck on a UI bug, use `agent-browser errors` and `agent-browser console`. When stuck on an API or library question, use Ref or Exa.
+
 ## Bash Rules
 
 - Execute commands one by one (no `&&`, `;`, `|`)
