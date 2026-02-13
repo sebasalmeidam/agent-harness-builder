@@ -6,6 +6,7 @@ interface TeamSummary {
   name: string;
   description: string;
   agentCount: number;
+  agentEmojis: string[];
 }
 
 interface AssignTeamModalProps {
@@ -123,32 +124,47 @@ export default function AssignTeamModal({
         {!loading && teams.length > 0 && (
           <div className="max-h-64 space-y-2 overflow-y-auto">
             {teams.map((team) => (
-              <label
+              <div
                 key={team.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors ${
+                role="option"
+                aria-selected={selectedTeamId === team.id}
+                onClick={() => setSelectedTeamId(team.id)}
+                className={`cursor-pointer rounded-md p-3 transition-colors ${
                   selectedTeamId === team.id
-                    ? "border-primary bg-primary-light"
-                    : "border-border hover:border-primary/50"
+                    ? "border-2 border-primary bg-primary-light"
+                    : "border border-border hover:border-primary/50"
                 }`}
               >
-                <input
-                  type="radio"
-                  name="team"
-                  value={team.id}
-                  checked={selectedTeamId === team.id}
-                  onChange={() => setSelectedTeamId(team.id)}
-                  className="h-4 w-4 text-primary accent-primary"
-                />
-                <div className="flex-1">
-                  <p className="font-body text-sm font-medium text-black">
-                    {team.name}
-                  </p>
-                  <p className="font-body text-xs text-text-secondary">
-                    {team.agentCount}{" "}
-                    {team.agentCount === 1 ? "agent" : "agents"}
-                  </p>
-                </div>
-              </label>
+                {team.agentEmojis && team.agentEmojis.length > 0 && (
+                  <div className="mb-1 flex items-center gap-1">
+                    {team.agentEmojis.length <= 4
+                      ? team.agentEmojis.map((emoji, i) => (
+                          <span key={i} className="text-[20px] leading-none">
+                            {emoji}
+                          </span>
+                        ))
+                      : (
+                        <>
+                          {team.agentEmojis.slice(0, 3).map((emoji, i) => (
+                            <span key={i} className="text-[20px] leading-none">
+                              {emoji}
+                            </span>
+                          ))}
+                          <span className="font-body text-xs text-text-secondary">
+                            +{team.agentEmojis.length - 3}
+                          </span>
+                        </>
+                      )}
+                  </div>
+                )}
+                <p className="font-body text-sm font-medium text-black">
+                  {team.name}
+                </p>
+                <p className="font-body text-xs text-text-secondary">
+                  {team.agentCount}{" "}
+                  {team.agentCount === 1 ? "agent" : "agents"}
+                </p>
+              </div>
             ))}
           </div>
         )}

@@ -11,6 +11,7 @@ interface Project {
   spec: string;
   teamId: string | null;
   gitUrl: string | null;
+  emoji: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -329,24 +330,29 @@ export default function ProjectDetailPage() {
 
       {/* Project header */}
       <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={handleNameBlur}
-            aria-label="Project name"
-            className="w-full border-0 bg-transparent p-0 font-heading text-[28px] font-semibold text-black focus:outline-none focus:ring-0"
-          />
-          <input
-            type="text"
-            value={editDescription}
-            onChange={(e) => setEditDescription(e.target.value)}
-            onBlur={handleDescriptionBlur}
-            placeholder="Add a description..."
-            aria-label="Project description"
-            className="mt-1 w-full border-0 bg-transparent p-0 font-body text-sm text-text-secondary focus:outline-none focus:ring-0"
-          />
+        <div className="flex flex-1 gap-3">
+          <span className="text-[32px] leading-none" data-testid="project-emoji">
+            {project.emoji || "\u{1F4E6}"}
+          </span>
+          <div className="flex-1">
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleNameBlur}
+              aria-label="Project name"
+              className="w-full border-0 bg-transparent p-0 font-heading text-[28px] font-semibold text-black focus:outline-none focus:ring-0"
+            />
+            <input
+              type="text"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              onBlur={handleDescriptionBlur}
+              placeholder="Add a description..."
+              aria-label="Project description"
+              className="mt-1 w-full border-0 bg-transparent p-0 font-body text-sm text-text-secondary focus:outline-none focus:ring-0"
+            />
+          </div>
         </div>
 
         <button

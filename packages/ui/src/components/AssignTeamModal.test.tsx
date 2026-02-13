@@ -9,12 +9,14 @@ const mockTeamsList = [
     name: "Team Alpha",
     description: "Alpha team",
     agentCount: 2,
+    agentEmojis: ["\u{1F468}\u{200D}\u{1F4BB}", "\u{1F9EA}"],
   },
   {
     id: "team-beta",
     name: "Team Beta",
     description: "Beta team",
     agentCount: 5,
+    agentEmojis: ["\u{1F680}", "\u{1F916}", "\u{1F4A1}", "\u{1F527}", "\u{1F3AF}"],
   },
 ];
 
@@ -158,7 +160,7 @@ describe("AssignTeamModal", () => {
     });
   });
 
-  test("selecting a team and confirming calls PUT with teamId", async () => {
+  test("selecting a team card and confirming calls PUT with teamId", async () => {
     const onAssigned = vi.fn();
     renderModal({ onAssigned });
 
@@ -166,9 +168,8 @@ describe("AssignTeamModal", () => {
       expect(screen.getByText("Team Alpha")).toBeTruthy();
     });
 
-    // Select Team Alpha
-    const radioAlpha = screen.getByDisplayValue("team-alpha");
-    fireEvent.click(radioAlpha);
+    // Select Team Alpha by clicking its card
+    fireEvent.click(screen.getByText("Team Alpha"));
 
     // Click Assign Team button
     const assignButton = screen.getByRole("button", { name: "Assign Team" });
@@ -240,9 +241,51 @@ describe("AssignTeamModal", () => {
       expect(screen.getByText("Team Beta")).toBeTruthy();
     });
 
-    const radioBeta = screen.getByDisplayValue(
-      "team-beta",
-    ) as HTMLInputElement;
-    expect(radioBeta.checked).toBe(true);
+    // The card for Team Beta should have aria-selected=true
+    const betaCard = screen.getByText("Team Beta").closest("[role='option']")!;
+    expect(betaCard.getAttribute("aria-selected")).toBe("true");
+  });
+
+  test("renders agent emoji avatars on team cards", async () => {
+    renderModal();
+
+    await waitFor(() => {
+      expect(screen.getByText("Team Alpha")).toBeTruthy();
+    });
+
+    // Team Alpha has 2 emojis -- both should render
+    expect(screen.getByText("\u{1F468}\u{200D}\u{1F4BB}")).toBeTruthy();
+    expect(screen.getByText("\u{1F9EA}")).toBeTruthy();
+  });
+
+  test("renders overflow badge for teams with more than 4 agents", async () => {
+    renderModal();
+
+    await waitFor(() => {
+      expect(screen.getByText("Team Beta")).toBeTruthy();
+    });
+
+    // Team Beta has 5 emojis: first 3 shown, "+2" badge
+    expect(screen.getByText("\u{1F680}")).toBeTruthy();
+    expect(screen.getByText("\u{1F916}")).toBeTruthy();
+    expect(screen.getByText("\u{1F4A1}")).toBeTruthy();
+    expect(screen.getByText("+2")).toBeTruthy();
+  });
+
+  test("selected card has primary border classes", async () => {
+    renderModal();
+
+    await waitFor(() => {
+      expect(screen.getByText("Team Alpha")).toBeTruthy();
+    });
+
+    // Click Team Alpha card
+    fireEvent.click(screen.getByText("Team Alpha"));
+
+    // Verify selected state classes
+    const alphaCard = screen.getByText("Team Alpha").closest("[role='option']")!;
+    expect(alphaCard.className).toContain("border-primary");
+    expect(alphaCard.className).toContain("bg-primary-light");
+    expect(alphaCard.className).toContain("border-2");
   });
 });

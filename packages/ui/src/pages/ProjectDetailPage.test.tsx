@@ -10,6 +10,7 @@ const mockProject = {
   spec: "Build a web application",
   teamId: "my-team",
   gitUrl: null,
+  emoji: "\u{1F680}",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
@@ -18,6 +19,18 @@ const mockProjectNoTeam = {
   id: "no-team-project",
   name: "No Team Project",
   description: "Project without a team",
+  spec: "",
+  teamId: null,
+  gitUrl: null,
+  emoji: "\u{1F4E6}",
+  createdAt: "2025-01-01T00:00:00.000Z",
+  updatedAt: "2025-01-01T00:00:00.000Z",
+};
+
+const mockProjectNoEmoji = {
+  id: "no-emoji-project",
+  name: "No Emoji Project",
+  description: "Project without emoji field",
   spec: "",
   teamId: null,
   gitUrl: null,
@@ -100,6 +113,19 @@ beforeEach(() => {
     ) {
       return Promise.resolve(
         new Response(JSON.stringify(mockProjectNoTeam), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    // GET /api/projects/no-emoji-project
+    if (
+      urlStr.endsWith("/api/projects/no-emoji-project") &&
+      method === "GET"
+    ) {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockProjectNoEmoji), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -253,6 +279,27 @@ describe("ProjectDetailPage", () => {
     });
 
     expect(screen.getByText("Back to Projects")).toBeTruthy();
+  });
+
+  test("renders project emoji in header next to the project name", async () => {
+    renderProjectDetail("test-project");
+
+    await waitFor(() => {
+      const emojiEl = screen.getByTestId("project-emoji");
+      expect(emojiEl).toBeTruthy();
+      expect(emojiEl.textContent).toBe("\u{1F680}");
+      expect(emojiEl.className).toContain("text-[32px]");
+    });
+  });
+
+  test("renders default package emoji when project has no emoji field", async () => {
+    renderProjectDetail("no-emoji-project");
+
+    await waitFor(() => {
+      const emojiEl = screen.getByTestId("project-emoji");
+      expect(emojiEl).toBeTruthy();
+      expect(emojiEl.textContent).toBe("\u{1F4E6}");
+    });
   });
 
   test("renders spec textarea with existing spec value", async () => {
