@@ -6,15 +6,17 @@ export default function CreateTeamPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNameError(null);
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError("Team name is required");
+      setNameError("Team name is required");
       return;
     }
 
@@ -64,11 +66,23 @@ export default function CreateTeamPage() {
             id="team-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) {
+                setNameError(null);
+              }
+            }}
             placeholder="e.g. Full Stack Dev Team"
-            className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={`mt-1 block w-full rounded-md border bg-bg-primary px-3 py-2 font-body text-sm text-black placeholder:text-text-secondary focus:outline-none focus:ring-1 ${
+              nameError
+                ? "border-error focus:border-error focus:ring-error"
+                : "border-border focus:border-primary focus:ring-primary"
+            }`}
             autoFocus
           />
+          {nameError && (
+            <p className="mt-1 font-body text-sm text-error">{nameError}</p>
+          )}
         </div>
 
         <div>
