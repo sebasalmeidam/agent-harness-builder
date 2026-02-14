@@ -381,8 +381,77 @@ function addFileChange(run: ExecutionRun, filePath: string): void {
 }
 
 /**
+ * Analyzes activity log to identify completed checklist items.
+ * Returns updated checklist with completed items marked.
+ *
+ * This is a best-effort analysis using keyword matching.
+ * For each checklist item, we check if the activity log contains
+ * messages that suggest the item was completed.
+ */
+function updateChecklistFromResults(
+  task: taskService.Task,
+  activityLog: ActivityEntry[]
+): Array<{ id: string; description: string; completed: boolean }> {
+  if (!task.checklist || task.checklist.length === 0) {
+    return task.checklist;
+  }
+
+  // Combine all activity messages into a single searchable text
+  const activityText = activityLog
+    .map((entry) => entry.message.toLowerCase())
+    .join(" ");
+
+  // Update checklist items based on activity log content
+  return task.checklist.map((item) => {
+    if (item.completed) {
+      // Already completed, no need to update
+      return item;
+    }
+
+    // Extract keywords from checklist item description (words > 3 chars)
+    const keywords = item.description
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length > 3 && /^[a-z]+$/.test(word));
+
+    // Check if activity log mentions completion-related keywords
+    // along with item-specific keywords
+    const completionPatterns = [
+      "completed",
+      "finished",
+      "done",
+      "success",
+      "implemented",
+      "added",
+      "created",
+      "updated",
+    ];
+
+    // Count how many item keywords appear in activity text
+    const keywordMatches = keywords.filter((kw) =>
+      activityText.includes(kw),
+    ).length;
+
+    // Count how many completion patterns appear in activity text
+    const completionMatches = completionPatterns.filter((pattern) =>
+      activityText.includes(pattern),
+    ).length;
+
+    // If we have at least 2 keyword matches and at least 1 completion pattern,
+    // mark the item as completed
+    const shouldComplete = keywordMatches >= 2 && completionMatches >= 1;
+
+    return {
+      ...item,
+      completed: shouldComplete || item.completed,
+    };
+  });
+}
+
+/**
  * Completes a run with the given status and summary.
- * If the run is associated with a task (taskId is not null), updates the task status.
+ * If the run is associated with a task (taskId is not null), updates the task status
+ * and attempts to update checklist items based on activity log analysis.
  */
 async function completeRun(
   run: ExecutionRun,
@@ -405,10 +474,34 @@ async function completeRun(
     }
   }
 
-  // Update task status if this run is associated with a task
+  // Update task status and checklist if this run is associated with a task
   if (run.taskId) {
     const taskStatus = status === "completed" ? "done" : "failed";
-    await taskService.update(run.projectId, run.taskId, { status: taskStatus });
+
+    // If execution was successful, try to update checklist based on activity log
+    if (status === "completed") {
+      const task = await taskService.get(run.projectId, run.taskId);
+      if (task) {
+        const updatedChecklist = updateChecklistFromResults(
+          task,
+          run.activityLog,
+        );
+        await taskService.update(run.projectId, run.taskId, {
+          status: taskStatus,
+          checklist: updatedChecklist,
+        });
+      } else {
+        // Task not found, just update status
+        await taskService.update(run.projectId, run.taskId, {
+          status: taskStatus,
+        });
+      }
+    } else {
+      // Failed execution, just update status
+      await taskService.update(run.projectId, run.taskId, {
+        status: taskStatus,
+      });
+    }
   }
 
   // Persist final run record

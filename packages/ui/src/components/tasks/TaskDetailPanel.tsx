@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Play } from "lucide-react";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
+import TaskActivityLog from "./TaskActivityLog";
 
 interface Task {
   id: string;
@@ -28,6 +29,8 @@ export default function TaskDetailPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [runId, setRunId] = useState<string | null>(null);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -158,6 +161,69 @@ export default function TaskDetailPanel({
     [saveChanges],
   );
 
+  // Fetch and refresh task data
+  const refreshTask = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`);
+      if (res.ok) {
+        const data: Task = await res.json();
+        setTask(data);
+        setEditTitle(data.title);
+        setEditDescription(data.description);
+        setEditChecklist(data.checklist);
+        setEditTeamId(data.teamId);
+        titleBeforeEdit.current = data.title;
+        descriptionBeforeEdit.current = data.description;
+        onUpdate?.();
+      }
+    } catch (err) {
+      console.error("Failed to refresh task:", err);
+    }
+  }, [projectId, taskId, onUpdate]);
+
+  // Handle execute button click
+  const handleExecute = useCallback(async () => {
+    if (!task) return;
+
+    setExecuting(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/tasks/${taskId}/execute`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `Failed to execute task: ${res.statusText}`,
+        );
+      }
+
+      const data = await res.json();
+      setRunId(data.runId);
+
+      // Update task status to running immediately
+      setTask({ ...task, status: "running" });
+      onUpdate?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to execute task");
+    } finally {
+      setExecuting(false);
+    }
+  }, [task, taskId, projectId, onUpdate]);
+
+  // Handle execution completion
+  const handleExecutionComplete = useCallback(
+    (status: "completed" | "failed") => {
+      // Refresh task data to get updated checklist and status
+      refreshTask();
+    },
+    [refreshTask],
+  );
+
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-bg-primary p-6">
@@ -233,17 +299,33 @@ export default function TaskDetailPanel({
       {/* Execute Button */}
       <div>
         <button
-          disabled
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-body text-sm font-medium text-white transition-colors disabled:opacity-50"
+          disabled={
+            !editTeamId ||
+            task.status === "running" ||
+            task.status === "done" ||
+            executing
+          }
+          onClick={handleExecute}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-body text-sm font-medium text-white transition-colors disabled:opacity-50 hover:bg-primary/90 disabled:hover:bg-primary"
           title={
-            editTeamId
-              ? "Execution will be available in a future update"
-              : "Assign a team to execute this task"
+            !editTeamId
+              ? "Assign a team to execute this task"
+              : task.status === "done"
+                ? "Task is already completed"
+                : task.status === "running"
+                  ? "Task is currently running"
+                  : "Execute this task"
           }
           data-testid="execute-button"
         >
           <Play className="h-4 w-4" />
-          Execute Task
+          {task.status === "running"
+            ? "Running..."
+            : task.status === "done"
+              ? "Completed"
+              : executing
+                ? "Starting..."
+                : "Execute Task"}
         </button>
       </div>
 
@@ -252,6 +334,15 @@ export default function TaskDetailPanel({
         <div className="mt-4 font-body text-xs text-text-secondary">
           Saving...
         </div>
+      )}
+
+      {/* Activity Log (shown during and after execution) */}
+      {runId && (
+        <TaskActivityLog
+          projectId={projectId}
+          runId={runId}
+          onComplete={handleExecutionComplete}
+        />
       )}
     </div>
   );
