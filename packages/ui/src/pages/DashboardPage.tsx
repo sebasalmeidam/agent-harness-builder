@@ -7,10 +7,11 @@ interface ProjectSummary {
   id: string;
   name: string;
   description: string;
-  teamId: string | null;
-  createdAt: string;
   emoji: string;
-  runCount: number;
+  path: string;
+  taskCount: number;
+  pathExists: boolean;
+  createdAt: string;
 }
 
 interface TeamSummary {
@@ -143,8 +144,8 @@ export default function DashboardPage() {
                 )}
                 <div className="mt-auto pt-3">
                   <span className="font-body text-[12px] font-normal text-text-muted">
-                    {project.teamId ? 1 : 0} teams &middot; {project.runCount}{" "}
-                    runs
+                    {project.taskCount}{" "}
+                    {project.taskCount === 1 ? "task" : "tasks"}
                   </span>
                 </div>
               </Link>

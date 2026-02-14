@@ -8,19 +8,21 @@ const sampleProjects = [
     id: "project-alpha",
     name: "Project Alpha",
     description: "First project",
-    teamId: "team-one",
-    createdAt: "2025-01-01T00:00:00.000Z",
     emoji: "\uD83D\uDE80",
-    runCount: 5,
+    path: "/home/user/alpha",
+    taskCount: 5,
+    pathExists: true,
+    createdAt: "2025-01-01T00:00:00.000Z",
   },
   {
     id: "project-beta",
     name: "Project Beta",
     description: "Second project",
-    teamId: null,
-    createdAt: "2025-01-02T00:00:00.000Z",
     emoji: "\uD83D\uDCE6",
-    runCount: 0,
+    path: "/home/user/beta",
+    taskCount: 0,
+    pathExists: true,
+    createdAt: "2025-01-02T00:00:00.000Z",
   },
 ];
 
@@ -161,9 +163,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("\uD83D\uDE80")).toBeTruthy();
     expect(screen.getByText("\uD83D\uDCE6")).toBeTruthy();
 
-    // Project cards show metadata row "N teams . N runs"
-    expect(screen.getByText(/1 teams .+ 5 runs/)).toBeTruthy();
-    expect(screen.getByText(/0 teams .+ 0 runs/)).toBeTruthy();
+    // Project cards show task count
+    expect(screen.getByText("5 tasks")).toBeTruthy();
+    expect(screen.getByText("0 tasks")).toBeTruthy();
   });
 
   test("renders team cards when teams exist", async () => {

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import ErrorCard from "../components/ErrorCard";
 
 interface ProjectSummary {
   id: string;
   name: string;
   description: string;
-  teamId: string | null;
+  emoji: string;
+  path: string;
+  taskCount: number;
+  pathExists: boolean;
   createdAt: string;
 }
 
@@ -105,10 +108,23 @@ export default function ProjectsListPage() {
                     {project.description}
                   </p>
                 )}
-                <div className="mt-auto pt-4">
-                  <span className="font-body text-xs text-text-secondary">
-                    {project.teamId ? "Team assigned" : "No team assigned"}
+                <div className="mt-2 font-body text-xs text-text-secondary font-mono truncate" title={project.path}>
+                  {project.path || "No path configured"}
+                </div>
+                <div className="mt-auto pt-4 flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-bg-secondary px-2 py-0.5 font-body text-xs text-text-secondary">
+                    {project.taskCount} {project.taskCount === 1 ? "task" : "tasks"}
                   </span>
+                  {!project.pathExists && (
+                    <span
+                      className="inline-flex items-center gap-1 text-warning font-body text-xs"
+                      title="Directory not found"
+                      data-testid="path-warning"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      Path missing
+                    </span>
+                  )}
                 </div>
               </Link>
               <button

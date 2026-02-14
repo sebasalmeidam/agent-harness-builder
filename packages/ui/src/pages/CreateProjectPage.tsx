@@ -8,7 +8,7 @@ export default function CreateProjectPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [gitUrl, setGitUrl] = useState("");
+  const [path, setPath] = useState("");
   const [emoji, setEmoji] = useState(DEFAULT_EMOJIS.project);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -23,17 +23,20 @@ export default function CreateProjectPage() {
       return;
     }
 
+    const trimmedPath = path.trim();
+    if (!trimmedPath) {
+      setError("Project path is required");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const body: Record<string, string> = {
         name: trimmedName,
         description: description.trim(),
         emoji: emoji,
+        path: trimmedPath,
       };
-      const trimmedGitUrl = gitUrl.trim();
-      if (trimmedGitUrl) {
-        body.gitUrl = trimmedGitUrl;
-      }
 
       const res = await fetch("/api/projects", {
         method: "POST",
@@ -124,19 +127,22 @@ export default function CreateProjectPage() {
 
         <div>
           <label
-            htmlFor="project-git-url"
+            htmlFor="project-path"
             className="block font-body text-sm font-medium text-black"
           >
-            Git Repository URL
+            Project Path <span className="text-red-500">*</span>
           </label>
           <input
-            id="project-git-url"
+            id="project-path"
             type="text"
-            value={gitUrl}
-            onChange={(e) => setGitUrl(e.target.value)}
-            placeholder="https://github.com/user/repo (optional)"
-            className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            placeholder="/home/user/projects/my-app"
+            className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm font-mono text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
+          <p className="mt-1 font-body text-xs text-text-secondary">
+            Absolute path to the local project directory
+          </p>
         </div>
 
         <div className="flex items-center gap-3 pt-2">

@@ -3,10 +3,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import ProjectsListPage from "./ProjectsListPage";
 
-function renderProjectsList(fetchImpl?: typeof fetch) {
-  if (fetchImpl) {
-    vi.spyOn(globalThis, "fetch").mockImplementation(fetchImpl);
-  }
+function renderProjectsList() {
   const router = createMemoryRouter(
     [
       { path: "/projects", element: <ProjectsListPage /> },
@@ -83,7 +80,7 @@ describe("ProjectsListPage", () => {
     });
   });
 
-  test("renders project cards when projects exist", async () => {
+  test("renders project cards with path and task count", async () => {
     fetchMock.mockImplementation(
       (url: string | URL | Request, init?: RequestInit) => {
         const urlStr = typeof url === "string" ? url : url.toString();
@@ -97,14 +94,20 @@ describe("ProjectsListPage", () => {
                   id: "my-project",
                   name: "My Project",
                   description: "A test project",
-                  teamId: null,
+                  emoji: "\u{1F4E6}",
+                  path: "/home/user/projects/my-app",
+                  taskCount: 3,
+                  pathExists: true,
                   createdAt: "2025-01-01T00:00:00.000Z",
                 },
                 {
                   id: "another-project",
                   name: "Another Project",
                   description: "Another test",
-                  teamId: "some-team",
+                  emoji: "\u{1F680}",
+                  path: "/home/user/projects/other",
+                  taskCount: 0,
+                  pathExists: true,
                   createdAt: "2025-01-02T00:00:00.000Z",
                 },
               ]),
@@ -133,13 +136,63 @@ describe("ProjectsListPage", () => {
       expect(screen.getByText("Another test")).toBeTruthy();
     });
 
-    // Check team status metadata
-    expect(screen.getByText("No team assigned")).toBeTruthy();
-    expect(screen.getByText("Team assigned")).toBeTruthy();
+    // Check path display
+    expect(screen.getByText("/home/user/projects/my-app")).toBeTruthy();
+    expect(screen.getByText("/home/user/projects/other")).toBeTruthy();
+
+    // Check task count badges
+    expect(screen.getByText("3 tasks")).toBeTruthy();
+    expect(screen.getByText("0 tasks")).toBeTruthy();
+  });
+
+  test("shows warning indicator when pathExists is false", async () => {
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (urlStr.endsWith("/api/projects") && method === "GET") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  id: "missing-path",
+                  name: "Missing Path Project",
+                  description: "Path deleted",
+                  emoji: "\u{1F4E6}",
+                  path: "/home/user/deleted",
+                  taskCount: 1,
+                  pathExists: false,
+                  createdAt: "2025-01-01T00:00:00.000Z",
+                },
+              ]),
+              {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+          }),
+        );
+      },
+    );
+
+    renderProjectsList();
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing Path Project")).toBeTruthy();
+    });
+
+    expect(screen.getByTestId("path-warning")).toBeTruthy();
+    expect(screen.getByText("Path missing")).toBeTruthy();
   });
 
   test("delete removes project from list after confirmation", async () => {
-    // Mock window.confirm to return true
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     fetchMock.mockImplementation(
@@ -155,7 +208,10 @@ describe("ProjectsListPage", () => {
                   id: "delete-me",
                   name: "Delete Me",
                   description: "To be deleted",
-                  teamId: null,
+                  emoji: "\u{1F4E6}",
+                  path: "/home/user/del",
+                  taskCount: 0,
+                  pathExists: true,
                   createdAt: "2025-01-01T00:00:00.000Z",
                 },
               ]),
@@ -188,7 +244,6 @@ describe("ProjectsListPage", () => {
       expect(screen.getByText("Delete Me")).toBeTruthy();
     });
 
-    // Click the delete button
     const deleteButton = screen.getByTitle("Delete project");
     deleteButton.click();
 
@@ -220,7 +275,6 @@ describe("ProjectsListPage", () => {
       ).toBeTruthy();
     });
 
-    // Should show Retry button
     expect(screen.getByText("Retry")).toBeTruthy();
   });
 });

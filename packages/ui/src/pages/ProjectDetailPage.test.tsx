@@ -7,21 +7,17 @@ const mockProject = {
   id: "test-project",
   name: "Test Project",
   description: "A test project description",
-  spec: "Build a web application",
-  teamId: "my-team",
-  gitUrl: null,
+  path: "/home/user/projects/test",
   emoji: "\u{1F680}",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
 
-const mockProjectNoTeam = {
-  id: "no-team-project",
-  name: "No Team Project",
-  description: "Project without a team",
-  spec: "",
-  teamId: null,
-  gitUrl: null,
+const mockProjectNoPath = {
+  id: "no-path-project",
+  name: "No Path Project",
+  description: "Project without a path",
+  path: "",
   emoji: "\u{1F4E6}",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
@@ -31,58 +27,16 @@ const mockProjectNoEmoji = {
   id: "no-emoji-project",
   name: "No Emoji Project",
   description: "Project without emoji field",
-  spec: "",
-  teamId: null,
-  gitUrl: null,
+  path: "/home/user/projects/no-emoji",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
-
-const mockTeam = {
-  id: "my-team",
-  name: "My Team",
-  description: "A great team",
-  agents: [
-    {
-      id: "agent-1",
-      name: "Dev",
-      emoji: "",
-      role: "Developer",
-      goal: "Build",
-      skills: [],
-      practices: [],
-      position: { x: 0, y: 0 },
-    },
-    {
-      id: "agent-2",
-      name: "QA",
-      emoji: "",
-      role: "Tester",
-      goal: "Test",
-      skills: [],
-      practices: [],
-      position: { x: 0, y: 0 },
-    },
-  ],
-  edges: [],
-};
-
-const mockTeamsList = [
-  { id: "my-team", name: "My Team", description: "A great team", agentCount: 2 },
-  {
-    id: "other-team",
-    name: "Other Team",
-    description: "Another team",
-    agentCount: 3,
-  },
-];
 
 function renderProjectDetail(projectId: string) {
   const router = createMemoryRouter(
     [
       { path: "/projects/:id", element: <ProjectDetailPage /> },
       { path: "/projects", element: <div>Projects List Page</div> },
-      { path: "/teams/:id", element: <div>Team Detail Page</div> },
     ],
     { initialEntries: [`/projects/${projectId}`] },
   );
@@ -106,13 +60,13 @@ beforeEach(() => {
       );
     }
 
-    // GET /api/projects/no-team-project
+    // GET /api/projects/no-path-project
     if (
-      urlStr.endsWith("/api/projects/no-team-project") &&
+      urlStr.endsWith("/api/projects/no-path-project") &&
       method === "GET"
     ) {
       return Promise.resolve(
-        new Response(JSON.stringify(mockProjectNoTeam), {
+        new Response(JSON.stringify(mockProjectNoPath), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -142,24 +96,6 @@ beforeEach(() => {
       );
     }
 
-    // PUT /api/projects/:id
-    if (urlStr.includes("/api/projects/") && method === "PUT") {
-      const body = JSON.parse(init?.body as string);
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            ...mockProject,
-            ...body,
-            updatedAt: new Date().toISOString(),
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
-    }
-
     // PATCH /api/projects/:id
     if (urlStr.includes("/api/projects/") && method === "PATCH") {
       const patchBody = JSON.parse(init?.body as string);
@@ -181,47 +117,6 @@ beforeEach(() => {
     // DELETE /api/projects/:id
     if (urlStr.includes("/api/projects/") && method === "DELETE") {
       return Promise.resolve(new Response(null, { status: 204 }));
-    }
-
-    // GET /api/teams/my-team
-    if (urlStr.endsWith("/api/teams/my-team") && method === "GET") {
-      return Promise.resolve(
-        new Response(JSON.stringify(mockTeam), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    }
-
-    // GET /api/teams (list)
-    if (urlStr.endsWith("/api/teams") && method === "GET") {
-      return Promise.resolve(
-        new Response(JSON.stringify(mockTeamsList), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    }
-
-    // GET /api/projects/:id/runs (list runs)
-    if (urlStr.match(/\/api\/projects\/[^/]+\/runs$/) && method === "GET") {
-      return Promise.resolve(
-        new Response(
-          JSON.stringify([
-            {
-              id: "run-hist-1",
-              status: "completed",
-              startedAt: "2025-06-15T10:00:00.000Z",
-              completedAt: "2025-06-15T10:02:30.000Z",
-              error: null,
-            },
-          ]),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
     }
 
     return Promise.resolve(
@@ -266,7 +161,6 @@ describe("ProjectDetailPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Projects")).toBeTruthy();
-      // Project name in breadcrumb (non-link span)
       expect(screen.getByText("Test Project")).toBeTruthy();
     });
   });
@@ -302,139 +196,67 @@ describe("ProjectDetailPage", () => {
     });
   });
 
-  test("renders spec textarea with existing spec value", async () => {
+  test("displays project path as read-only", async () => {
     renderProjectDetail("test-project");
 
     await waitFor(() => {
-      const textarea = screen.getByLabelText(
-        /Project Specification/,
-      ) as HTMLTextAreaElement;
-      expect(textarea.value).toBe("Build a web application");
+      const pathEl = screen.getByTestId("project-path");
+      expect(pathEl).toBeTruthy();
+      expect(pathEl.textContent).toBe("/home/user/projects/test");
     });
   });
-});
 
-describe("Spec editor", () => {
-  test("spec textarea saves on button click", async () => {
+  test("shows path not configured for projects without path", async () => {
+    renderProjectDetail("no-path-project");
+
+    await waitFor(() => {
+      expect(screen.getByText("Path not configured")).toBeTruthy();
+    });
+  });
+
+  test("renders Project Path heading", async () => {
     renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Project Specification/)).toBeTruthy();
-    });
-
-    const textarea = screen.getByLabelText(
-      /Project Specification/,
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, {
-      target: { value: "Updated spec content" },
-    });
-
-    // Dirty indicator should appear
-    await waitFor(() => {
-      expect(screen.getByTestId("dirty-indicator")).toBeTruthy();
-    });
-
-    // Click Save Spec button
-    fireEvent.click(screen.getByText("Save Spec"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Spec saved successfully")).toBeTruthy();
-    });
-
-    // Verify PUT was called with correct spec
-    const putCall = fetchMock.mock.calls.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (call: any[]) => call[1]?.method === "PUT",
-    );
-    expect(putCall).toBeTruthy();
-    const body = JSON.parse(putCall![1]!.body as string);
-    expect(body.spec).toBe("Updated spec content");
-  });
-
-  test("save button is disabled when spec is not dirty", async () => {
-    renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(screen.getByText("Save Spec")).toBeTruthy();
-    });
-
-    const saveButton = screen.getByText("Save Spec").closest("button")!;
-    expect(saveButton.disabled).toBe(true);
-  });
-
-  test("dirty indicator disappears after saving", async () => {
-    renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Project Specification/)).toBeTruthy();
-    });
-
-    const textarea = screen.getByLabelText(/Project Specification/);
-    fireEvent.change(textarea, {
-      target: { value: "Changed spec" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("dirty-indicator")).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByText("Save Spec"));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("dirty-indicator")).toBeFalsy();
-    });
-  });
-});
-
-describe("Assigned team", () => {
-  test("displays assigned team when teamId is set", async () => {
-    renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(screen.getByText("My Team")).toBeTruthy();
-    });
-
-    expect(screen.getByText("2 agents")).toBeTruthy();
-  });
-
-  test("displays empty state when no team assigned", async () => {
-    renderProjectDetail("no-team-project");
 
     await waitFor(() => {
       expect(
-        screen.getByText("No team assigned to this project."),
+        screen.getByRole("heading", { name: "Project Path" }),
       ).toBeTruthy();
     });
   });
 
-  test("shows Assign Team button when no team", async () => {
-    renderProjectDetail("no-team-project");
-
-    await waitFor(() => {
-      expect(screen.getByText("Assign Team")).toBeTruthy();
-    });
-  });
-
-  test("shows Change Team button when team is assigned", async () => {
+  test("renders Tasks section with empty state", async () => {
     renderProjectDetail("test-project");
 
     await waitFor(() => {
-      expect(screen.getByText("Change Team")).toBeTruthy();
+      expect(
+        screen.getByRole("heading", { name: "Tasks" }),
+      ).toBeTruthy();
     });
+
+    expect(screen.getByTestId("tasks-empty-state")).toBeTruthy();
+    expect(screen.getByText("No tasks yet")).toBeTruthy();
   });
 
-  test("Assign Team button opens modal", async () => {
-    renderProjectDetail("no-team-project");
+  test("does not render spec editor or team section", async () => {
+    renderProjectDetail("test-project");
 
     await waitFor(() => {
-      expect(screen.getByText("Assign Team")).toBeTruthy();
+      expect(screen.getByLabelText("Project name")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText("Assign Team"));
+    // Spec editor should not exist
+    expect(screen.queryByLabelText(/Project Specification/)).toBeNull();
+    expect(screen.queryByText("Save Spec")).toBeNull();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("assign-team-modal")).toBeTruthy();
-    });
+    // Team section should not exist
+    expect(screen.queryByText("Assigned Team")).toBeNull();
+    expect(screen.queryByText("Assign Team")).toBeNull();
+
+    // Run button should not exist
+    expect(screen.queryByText("Run Team")).toBeNull();
+
+    // Past Executions should not exist
+    expect(screen.queryByText("Past Executions")).toBeNull();
   });
 });
 
@@ -486,90 +308,6 @@ describe("Delete project", () => {
       (call: any[]) => call[1]?.method === "DELETE",
     );
     expect(deleteCall).toBeFalsy();
-  });
-});
-
-describe("Past Executions", () => {
-  test("renders Past Executions heading on project detail page", async () => {
-    renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "Past Executions" }),
-      ).toBeTruthy();
-    });
-  });
-
-  test("renders RunHistoryList with past runs", async () => {
-    renderProjectDetail("test-project");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-history-list")).toBeTruthy();
-    });
-
-    // Should show the mock run entry
-    expect(screen.getByTestId("run-entry-run-hist-1")).toBeTruthy();
-    expect(screen.getByTestId("run-status-run-hist-1").textContent).toBe(
-      "Completed",
-    );
-  });
-
-  test("renders empty state for project with no runs", async () => {
-    // Override the fetch to return empty runs for no-team-project
-    fetchMock.mockImplementation(
-      (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr = typeof url === "string" ? url : url.toString();
-        const method = init?.method ?? "GET";
-
-        if (
-          urlStr.endsWith("/api/projects/no-team-project") &&
-          method === "GET"
-        ) {
-          return Promise.resolve(
-            new Response(JSON.stringify(mockProjectNoTeam), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-
-        if (
-          urlStr.match(/\/api\/projects\/[^/]+\/runs$/) &&
-          method === "GET"
-        ) {
-          return Promise.resolve(
-            new Response(JSON.stringify([]), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-
-        if (urlStr.endsWith("/api/teams") && method === "GET") {
-          return Promise.resolve(
-            new Response(JSON.stringify(mockTeamsList), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: "Not found" }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      },
-    );
-
-    renderProjectDetail("no-team-project");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-history-empty")).toBeTruthy();
-    });
-
-    expect(screen.getByText("No past executions yet.")).toBeTruthy();
   });
 });
 
@@ -660,7 +398,6 @@ describe("Inline editing", () => {
     fireEvent.blur(nameInput);
 
     await waitFor(() => {
-      // After PATCH response, project.name updates and breadcrumb reflects it
       expect(screen.getByText("Renamed Project")).toBeTruthy();
     });
   });
@@ -690,34 +427,12 @@ describe("Inline editing", () => {
           );
         }
 
-        // Fallback for other requests
         if (
           urlStr.endsWith("/api/projects/test-project") &&
           method === "GET"
         ) {
           return Promise.resolve(
             new Response(JSON.stringify(mockProject), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-
-        if (urlStr.endsWith("/api/teams/my-team") && method === "GET") {
-          return Promise.resolve(
-            new Response(JSON.stringify(mockTeam), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-
-        if (
-          urlStr.match(/\/api\/projects\/[^/]+\/runs$/) &&
-          method === "GET"
-        ) {
-          return Promise.resolve(
-            new Response(JSON.stringify([]), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             }),
@@ -757,10 +472,8 @@ describe("Inline editing", () => {
     const nameInput = screen.getByLabelText(
       "Project name",
     ) as HTMLInputElement;
-    // Blur without changing value
     fireEvent.blur(nameInput);
 
-    // Wait a tick and verify no PATCH was made
     await waitFor(() => {
       const patchCall = fetchMock.mock.calls.find(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -783,12 +496,10 @@ describe("Inline editing", () => {
     fireEvent.change(nameInput, { target: { value: "  " } });
     fireEvent.blur(nameInput);
 
-    // Should revert to original name
     await waitFor(() => {
       expect(nameInput.value).toBe("Test Project");
     });
 
-    // No PATCH should have been called
     const patchCall = fetchMock.mock.calls.find(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (call: any[]) => call[1]?.method === "PATCH",

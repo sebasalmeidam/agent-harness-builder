@@ -35,9 +35,8 @@ beforeEach(() => {
               .replace(/\s+/g, "-"),
             name: body.name,
             description: body.description ?? "",
-            spec: "",
-            teamId: null,
-            gitUrl: null,
+            path: body.path,
+            emoji: body.emoji ?? "\u{1F4E6}",
             createdAt: "2025-01-01T00:00:00.000Z",
             updatedAt: "2025-01-01T00:00:00.000Z",
           }),
@@ -71,6 +70,7 @@ describe("CreateProjectPage", () => {
     expect(screen.getByLabelText(/Emoji/)).toBeTruthy();
     expect(screen.getByLabelText(/Project Name/)).toBeTruthy();
     expect(screen.getByLabelText(/Description/)).toBeTruthy();
+    expect(screen.getByLabelText(/Project Path/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create Project" })).toBeTruthy();
     expect(screen.getByText("Cancel")).toBeTruthy();
   });
@@ -78,9 +78,8 @@ describe("CreateProjectPage", () => {
   test("emoji field has default package emoji", () => {
     renderCreateProject();
 
-    // The emoji picker trigger button displays the default package emoji
     const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
-    expect(emojiTrigger.textContent).toBe("📦");
+    expect(emojiTrigger.textContent).toBe("\u{1F4E6}");
   });
 
   test("validates name is required on submit", async () => {
@@ -95,7 +94,6 @@ describe("CreateProjectPage", () => {
       expect(screen.getByText("Project name is required")).toBeTruthy();
     });
 
-    // Fetch should not have been called
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -115,6 +113,24 @@ describe("CreateProjectPage", () => {
     });
   });
 
+  test("validates path is required on submit", async () => {
+    renderCreateProject();
+
+    const nameInput = screen.getByLabelText(/Project Name/);
+    fireEvent.change(nameInput, { target: { value: "My Project" } });
+
+    const submitButton = screen.getByText("Create Project", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Project path is required")).toBeTruthy();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("successful creation navigates to project detail", async () => {
     const { router } = renderCreateProject();
 
@@ -126,6 +142,11 @@ describe("CreateProjectPage", () => {
       target: { value: "A great project" },
     });
 
+    const pathInput = screen.getByLabelText(/Project Path/);
+    fireEvent.change(pathInput, {
+      target: { value: "/home/user/projects/my-app" },
+    });
+
     const submitButton = screen.getByText("Create Project", {
       selector: "button",
     });
@@ -135,14 +156,14 @@ describe("CreateProjectPage", () => {
       expect(router.state.location.pathname).toBe("/projects/my-new-project");
     });
 
-    // Verify the correct data was sent (includes default emoji)
     expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "My New Project",
         description: "A great project",
-        emoji: "\uD83D\uDCE6",
+        emoji: "\u{1F4E6}",
+        path: "/home/user/projects/my-app",
       }),
     });
   });
@@ -180,6 +201,9 @@ describe("CreateProjectPage", () => {
     const nameInput = screen.getByLabelText(/Project Name/);
     fireEvent.change(nameInput, { target: { value: "Duplicate Project" } });
 
+    const pathInput = screen.getByLabelText(/Project Path/);
+    fireEvent.change(pathInput, { target: { value: "/home/user/dup" } });
+
     const submitButton = screen.getByText("Create Project", {
       selector: "button",
     });
@@ -192,6 +216,54 @@ describe("CreateProjectPage", () => {
     });
   });
 
+  test("shows server error for invalid path", async () => {
+    fetchMock.mockImplementation(
+      (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === "string" ? url : url.toString();
+        const method = init?.method ?? "GET";
+
+        if (urlStr.endsWith("/api/projects") && method === "POST") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                error: "Path must be an absolute path",
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+          }),
+        );
+      },
+    );
+
+    renderCreateProject();
+
+    const nameInput = screen.getByLabelText(/Project Name/);
+    fireEvent.change(nameInput, { target: { value: "Bad Path Project" } });
+
+    const pathInput = screen.getByLabelText(/Project Path/);
+    fireEvent.change(pathInput, { target: { value: "relative/path" } });
+
+    const submitButton = screen.getByText("Create Project", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Path must be an absolute path"),
+      ).toBeTruthy();
+    });
+  });
+
   test("cancel link navigates to projects list", () => {
     renderCreateProject();
 
@@ -199,92 +271,36 @@ describe("CreateProjectPage", () => {
     expect(cancelLink.closest("a")?.getAttribute("href")).toBe("/projects");
   });
 
-  test("renders the git URL field", () => {
+  test("renders the path field with helper text", () => {
     renderCreateProject();
 
-    expect(screen.getByLabelText(/Git Repository URL/)).toBeTruthy();
+    expect(screen.getByLabelText(/Project Path/)).toBeTruthy();
     expect(
-      screen.getByPlaceholderText(
-        "https://github.com/user/repo (optional)",
-      ),
+      screen.getByPlaceholderText("/home/user/projects/my-app"),
     ).toBeTruthy();
-  });
-
-  test("submission includes gitUrl when provided", async () => {
-    const { router } = renderCreateProject();
-
-    const nameInput = screen.getByLabelText(/Project Name/);
-    fireEvent.change(nameInput, { target: { value: "Git Project" } });
-
-    const gitUrlInput = screen.getByLabelText(/Git Repository URL/);
-    fireEvent.change(gitUrlInput, {
-      target: { value: "https://github.com/octocat/Hello-World.git" },
-    });
-
-    const submitButton = screen.getByText("Create Project", {
-      selector: "button",
-    });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/projects/git-project");
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Git Project",
-        description: "",
-        emoji: "\uD83D\uDCE6",
-        gitUrl: "https://github.com/octocat/Hello-World.git",
-      }),
-    });
-  });
-
-  test("submission works without gitUrl", async () => {
-    const { router } = renderCreateProject();
-
-    const nameInput = screen.getByLabelText(/Project Name/);
-    fireEvent.change(nameInput, { target: { value: "No Git" } });
-
-    const submitButton = screen.getByText("Create Project", {
-      selector: "button",
-    });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/projects/no-git");
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "No Git",
-        description: "",
-        emoji: "\uD83D\uDCE6",
-      }),
-    });
+    expect(
+      screen.getByText("Absolute path to the local project directory"),
+    ).toBeTruthy();
   });
 
   test("submission includes custom emoji when changed", async () => {
     const { router } = renderCreateProject();
 
-    // Open emoji picker
     const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
     fireEvent.click(emojiTrigger);
 
-    // Wait for popover to appear and select rocket emoji
     await waitFor(() => {
       expect(screen.getByTestId("emoji-picker-popover")).toBeTruthy();
     });
 
-    const rocketEmoji = screen.getByTestId("emoji-🚀");
+    const rocketEmoji = screen.getByTestId("emoji-\u{1F680}");
     fireEvent.click(rocketEmoji);
 
     const nameInput = screen.getByLabelText(/Project Name/);
     fireEvent.change(nameInput, { target: { value: "Rocket Project" } });
+
+    const pathInput = screen.getByLabelText(/Project Path/);
+    fireEvent.change(pathInput, { target: { value: "/home/user/rocket" } });
 
     const submitButton = screen.getByText("Create Project", {
       selector: "button",
@@ -301,7 +317,8 @@ describe("CreateProjectPage", () => {
       body: JSON.stringify({
         name: "Rocket Project",
         description: "",
-        emoji: "🚀",
+        emoji: "\u{1F680}",
+        path: "/home/user/rocket",
       }),
     });
   });

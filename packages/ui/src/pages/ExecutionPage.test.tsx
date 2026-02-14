@@ -1,8 +1,7 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import ExecutionPage from "./ExecutionPage";
-import ProjectDetailPage from "./ProjectDetailPage";
 
 // --- Mock data ---
 
@@ -338,21 +337,7 @@ function renderExecutionPage(projectId: string, runId: string) {
   return { router, ...render(<RouterProvider router={router} />) };
 }
 
-function renderProjectDetail(projectId: string) {
-  const router = createMemoryRouter(
-    [
-      { path: "/projects/:id", element: <ProjectDetailPage /> },
-      { path: "/projects", element: <div>Projects List Page</div> },
-      { path: "/teams/:id", element: <div>Team Detail Page</div> },
-      {
-        path: "/projects/:id/runs/:runId",
-        element: <div>Execution Page</div>,
-      },
-    ],
-    { initialEntries: [`/projects/${projectId}`] },
-  );
-  return { router, ...render(<RouterProvider router={router} />) };
-}
+// renderProjectDetail removed in ADR-018 Phase 2 (Run Team moved to task level in ADR-021)
 
 beforeEach(() => {
   MockEventSource.reset();
@@ -920,132 +905,8 @@ describe("ExecutionSummaryCard", () => {
   });
 });
 
-// --- ProjectDetailPage "Run Team" button tests ---
-
-describe("ProjectDetailPage Run Team button", () => {
-  test("Run Team button is disabled when no team assigned", async () => {
-    renderProjectDetail("proj-no-team");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-team-button")).toBeTruthy();
-    });
-
-    const button = screen.getByTestId("run-team-button") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-  });
-
-  test("Run Team button is disabled when spec is empty", async () => {
-    renderProjectDetail("proj-no-spec");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-team-button")).toBeTruthy();
-    });
-
-    const button = screen.getByTestId("run-team-button") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-  });
-
-  test("Run Team button is enabled when team and spec are present", async () => {
-    renderProjectDetail("proj-1");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-team-button")).toBeTruthy();
-    });
-
-    const button = screen.getByTestId("run-team-button") as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
-  });
-
-  test("Run Team button triggers POST and navigates to execution page", async () => {
-    const { router } = renderProjectDetail("proj-1");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("run-team-button")).toBeTruthy();
-    });
-
-    const button = screen.getByTestId("run-team-button") as HTMLButtonElement;
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(
-        "/projects/proj-1/runs/run-123",
-      );
-    });
-
-    // Verify POST was called
-    const postCall = fetchMock.mock.calls.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (call: any[]) =>
-        typeof call[0] === "string" &&
-        call[0].includes("/runs") &&
-        call[1]?.method === "POST",
-    );
-    expect(postCall).toBeTruthy();
-  });
-
-  test("Run Team button shows error when trigger fails", async () => {
-    // Override POST to fail
-    fetchMock.mockImplementation(
-      (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr = typeof url === "string" ? url : url.toString();
-        const method = init?.method ?? "GET";
-
-        if (urlStr.includes("/runs") && method === "POST") {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({ error: "Project has no team assigned" }),
-              {
-                status: 400,
-                headers: { "Content-Type": "application/json" },
-              },
-            ),
-          );
-        }
-
-        // Return defaults for other requests
-        if (urlStr.endsWith("/api/projects/proj-1") && method === "GET") {
-          return Promise.resolve(
-            new Response(JSON.stringify(mockProject), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-        if (urlStr.endsWith("/api/teams/team-1") && method === "GET") {
-          return Promise.resolve(
-            new Response(JSON.stringify(mockTeam), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-          );
-        }
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: "Not found" }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      },
-    );
-
-    renderProjectDetail("proj-1");
-
-    await waitFor(() => {
-      const button = screen.getByTestId(
-        "run-team-button",
-      ) as HTMLButtonElement;
-      expect(button.disabled).toBe(false);
-    });
-
-    fireEvent.click(screen.getByTestId("run-team-button"));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("Project has no team assigned"),
-      ).toBeTruthy();
-    });
-  });
-});
+// ProjectDetailPage Run Team button tests removed in ADR-018 Phase 2
+// Run Team functionality moved to task level in ADR-021
 
 // --- ExecutionPage History Mode tests ---
 
