@@ -11,6 +11,7 @@ export interface Agent {
   role: string;
   goal: string;
   skills: string[];
+  skillIds: string[];
   practices: string[];
   position: { x: number; y: number };
 }
@@ -90,6 +91,11 @@ export async function list(): Promise<TeamSummary[]> {
     try {
       const content = await readFile(join(teamsDir, file), "utf-8");
       const team: Team = JSON.parse(content);
+      // Ensure backward compatibility: default skillIds to [] if missing
+      team.agents = team.agents.map((agent) => ({
+        ...agent,
+        skillIds: agent.skillIds ?? [],
+      }));
       summaries.push({
         id: team.id,
         name: team.name,
@@ -110,7 +116,13 @@ export async function get(id: string): Promise<Team | null> {
   const filePath = teamFilePath(teamsDir, id);
   try {
     const content = await readFile(filePath, "utf-8");
-    return JSON.parse(content) as Team;
+    const team = JSON.parse(content) as Team;
+    // Ensure backward compatibility: default skillIds to [] if missing
+    team.agents = team.agents.map((agent) => ({
+      ...agent,
+      skillIds: agent.skillIds ?? [],
+    }));
+    return team;
   } catch {
     return null;
   }

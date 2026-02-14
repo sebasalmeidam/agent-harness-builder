@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { test, expect, vi, beforeEach } from "vitest";
 import AgentSidebar from "./AgentSidebar";
 import type { AgentNodeData } from "../canvas/AgentNode";
@@ -10,6 +10,7 @@ function createMockData(overrides: Partial<AgentNodeData> = {}): AgentNodeData {
     role: "Lead Architect",
     goal: "Design robust systems",
     skills: ["TypeScript", "React"],
+    skillIds: [],
     practices: ["Code review", "TDD"],
     ...overrides,
   };
@@ -38,6 +39,7 @@ function renderSidebar(
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  global.fetch = vi.fn();
 });
 
 test("renders the sidebar with header", () => {
@@ -135,8 +137,17 @@ test("goal textarea accepts multi-line text", () => {
   );
 });
 
-test("renders skills as tags", () => {
+test("renders free-text tags under Tags label", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
   renderSidebar(createMockData({ skills: ["TypeScript", "React"] }));
+
+  await waitFor(() => {
+    expect(screen.getByText("Tags")).toBeTruthy();
+  });
 
   expect(screen.getByText("TypeScript")).toBeTruthy();
   expect(screen.getByText("React")).toBeTruthy();
@@ -180,12 +191,152 @@ test("does not call onDelete when delete is cancelled", () => {
 });
 
 test("renders all field labels", () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
   renderSidebar();
 
   expect(screen.getByLabelText("Name")).toBeTruthy();
   expect(screen.getByLabelText("Emoji")).toBeTruthy();
   expect(screen.getByLabelText("Role")).toBeTruthy();
   expect(screen.getByLabelText("Goal")).toBeTruthy();
-  expect(screen.getByText("Skills")).toBeTruthy();
+  expect(screen.getAllByText("Skills").length).toBeGreaterThan(0);
+  expect(screen.getByText("Tags")).toBeTruthy();
   expect(screen.getByText("Practices")).toBeTruthy();
+});
+
+test("fetches available skills on mount", async () => {
+  const mockSkills = [
+    { id: "skill-1", name: "TypeScript Expert", description: "Advanced TS knowledge" },
+    { id: "skill-2", name: "React Specialist", description: "React best practices" },
+  ];
+
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => mockSkills,
+  });
+
+  renderSidebar();
+
+  await waitFor(() => {
+    expect(screen.getByText("TypeScript Expert")).toBeTruthy();
+    expect(screen.getByText("React Specialist")).toBeTruthy();
+  });
+
+  expect(global.fetch).toHaveBeenCalledWith("/api/skills");
+});
+
+test("displays empty state when no skills are available", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar();
+
+  await waitFor(() => {
+    expect(screen.getByText("No skills available. Create skills in the Skills page.")).toBeTruthy();
+  });
+});
+
+test("displays loading state while fetching skills", () => {
+  (global.fetch as any).mockImplementation(() => new Promise(() => {}));
+
+  renderSidebar();
+
+  expect(screen.getByText("Loading skills...")).toBeTruthy();
+});
+
+test("handles skill selection", async () => {
+  const mockSkills = [
+    { id: "skill-1", name: "TypeScript Expert", description: "Advanced TS" },
+  ];
+
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => mockSkills,
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ skillIds: [] }), onChange);
+
+  await waitFor(() => {
+    expect(screen.getByText("TypeScript Expert")).toBeTruthy();
+  });
+
+  const checkbox = screen.getByTestId("skill-checkbox-skill-1") as HTMLInputElement;
+  expect(checkbox.checked).toBe(false);
+
+  fireEvent.click(checkbox);
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ skillIds: ["skill-1"] }),
+  );
+});
+
+test("handles skill deselection", async () => {
+  const mockSkills = [
+    { id: "skill-1", name: "TypeScript Expert", description: "Advanced TS" },
+  ];
+
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => mockSkills,
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ skillIds: ["skill-1"] }), onChange);
+
+  await waitFor(() => {
+    expect(screen.getByText("TypeScript Expert")).toBeTruthy();
+  });
+
+  const checkbox = screen.getByTestId("skill-checkbox-skill-1") as HTMLInputElement;
+  expect(checkbox.checked).toBe(true);
+
+  fireEvent.click(checkbox);
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ skillIds: [] }),
+  );
+});
+
+test("displays multiple skills with correct checked state", async () => {
+  const mockSkills = [
+    { id: "skill-1", name: "Skill A", description: "Description A" },
+    { id: "skill-2", name: "Skill B", description: "Description B" },
+    { id: "skill-3", name: "Skill C", description: "Description C" },
+  ];
+
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => mockSkills,
+  });
+
+  renderSidebar(createMockData({ skillIds: ["skill-1", "skill-3"] }));
+
+  await waitFor(() => {
+    expect(screen.getByText("Skill A")).toBeTruthy();
+  });
+
+  const checkbox1 = screen.getByTestId("skill-checkbox-skill-1") as HTMLInputElement;
+  const checkbox2 = screen.getByTestId("skill-checkbox-skill-2") as HTMLInputElement;
+  const checkbox3 = screen.getByTestId("skill-checkbox-skill-3") as HTMLInputElement;
+
+  expect(checkbox1.checked).toBe(true);
+  expect(checkbox2.checked).toBe(false);
+  expect(checkbox3.checked).toBe(true);
+});
+
+test("silently handles fetch error for skills", async () => {
+  (global.fetch as any).mockRejectedValue(new Error("Network error"));
+
+  renderSidebar();
+
+  // Should not throw, just show empty state after loading
+  await waitFor(() => {
+    expect(screen.queryByText("Loading skills...")).toBeNull();
+  });
 });

@@ -46,6 +46,7 @@ function mapAgent(agent: Agent): HarnessAgent {
     role: agent.role,
     goal: agent.goal,
     skills: [...agent.skills],
+    skillIds: agent.skillIds ?? [],
     practices: [...agent.practices],
     position: { x: agent.position.x, y: agent.position.y },
   };
@@ -120,6 +121,7 @@ function harnessAgentToAgent(agent: HarnessAgent): Agent {
     role: agent.role,
     goal: agent.goal,
     skills: [...agent.skills],
+    skillIds: agent.skillIds ?? [],
     practices: [...agent.practices],
     position: { x: agent.position.x, y: agent.position.y },
   };

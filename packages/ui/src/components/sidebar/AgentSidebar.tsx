@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import type { AgentNodeData } from "../canvas/AgentNode";
 import TagList from "./TagList";
@@ -10,14 +11,50 @@ interface AgentSidebarProps {
   onDelete: () => void;
 }
 
+interface SkillSummary {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export default function AgentSidebar({
   data,
   onChange,
   onClose,
   onDelete,
 }: AgentSidebarProps) {
+  const [availableSkills, setAvailableSkills] = useState<SkillSummary[]>([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
+
+  useEffect(() => {
+    async function fetchSkills() {
+      setLoadingSkills(true);
+      try {
+        const res = await fetch("/api/skills");
+        if (res.ok) {
+          const skills: SkillSummary[] = await res.json();
+          setAvailableSkills(skills);
+        }
+      } catch {
+        // Silently fail - skills will just be empty
+      } finally {
+        setLoadingSkills(false);
+      }
+    }
+
+    fetchSkills();
+  }, []);
+
   function handleFieldChange(field: keyof AgentNodeData, value: unknown) {
     onChange({ ...data, [field]: value });
+  }
+
+  function handleSkillToggle(skillId: string) {
+    const currentSkillIds = data.skillIds ?? [];
+    const newSkillIds = currentSkillIds.includes(skillId)
+      ? currentSkillIds.filter((id) => id !== skillId)
+      : [...currentSkillIds, skillId];
+    handleFieldChange("skillIds", newSkillIds);
   }
 
   function handleDeleteClick() {
@@ -125,9 +162,55 @@ export default function AgentSidebar({
             />
           </div>
 
-          {/* Skills */}
+          {/* Skills (Entity) */}
+          <div>
+            <label className="mb-1 block font-body text-sm text-text-secondary">
+              Skills
+            </label>
+            {loadingSkills ? (
+              <p className="font-body text-xs text-text-secondary">
+                Loading skills...
+              </p>
+            ) : availableSkills.length === 0 ? (
+              <p className="font-body text-xs text-text-secondary">
+                No skills available. Create skills in the Skills page.
+              </p>
+            ) : (
+              <div className="space-y-2 rounded-md border border-border bg-bg-primary px-3 py-2">
+                {availableSkills.map((skill) => {
+                  const isChecked = (data.skillIds ?? []).includes(skill.id);
+                  return (
+                    <label
+                      key={skill.id}
+                      className="flex items-start gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleSkillToggle(skill.id)}
+                        className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        data-testid={`skill-checkbox-${skill.id}`}
+                      />
+                      <div className="flex-1">
+                        <div className="font-body text-sm text-text-primary">
+                          {skill.name}
+                        </div>
+                        {skill.description && (
+                          <div className="font-body text-xs text-text-secondary">
+                            {skill.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Tags (Free-text) */}
           <TagList
-            label="Skills"
+            label="Tags"
             tags={data.skills}
             onChange={(skills) => handleFieldChange("skills", skills)}
           />

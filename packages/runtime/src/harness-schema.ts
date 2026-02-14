@@ -11,6 +11,7 @@ export interface HarnessAgent {
   role: string;
   goal: string;
   skills: string[];
+  skillIds: string[];
   practices: string[];
   position: { x: number; y: number };
 }

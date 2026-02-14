@@ -13,6 +13,7 @@ function makeAgent(overrides: Partial<HarnessAgent> = {}): HarnessAgent {
     role: "Software Developer",
     goal: "Write clean, tested code",
     skills: ["TypeScript", "Testing"],
+    skillIds: [],
     practices: ["Write tests first", "Keep functions small"],
     position: { x: 0, y: 0 },
     ...overrides,
