@@ -454,7 +454,7 @@ function TeamDetailContent() {
     } finally {
       setSaving(false);
     }
-  }, [team, editedName, editedDescription, nodes, edges]);
+  }, [team, editedName, editedDescription, nodes, edges, editedWorkflow]);
 
   const handleDeleteTeam = useCallback(async () => {
     if (!team) return;
