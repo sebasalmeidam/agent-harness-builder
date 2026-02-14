@@ -178,11 +178,19 @@ describe("SuggestionDraftList", () => {
       />
     );
 
-    expect(screen.getByTestId("checklist-item-0-0")).toBeTruthy();
+    // Initially 3 checklist items for suggestion 0
+    const initialItems = screen
+      .getByTestId("suggestion-0")
+      .querySelectorAll('[data-testid^="checklist-item-0-"]');
+    expect(initialItems.length).toBe(3);
 
     fireEvent.click(screen.getByTestId("remove-checklist-0-0"));
 
-    expect(screen.queryByTestId("checklist-item-0-0")).toBeNull();
+    // Now 2 checklist items (items re-index after removal)
+    const updatedItems = screen
+      .getByTestId("suggestion-0")
+      .querySelectorAll('[data-testid^="checklist-item-0-"]');
+    expect(updatedItems.length).toBe(2);
   });
 
   test("allows adding checklist items", () => {
@@ -218,19 +226,23 @@ describe("SuggestionDraftList", () => {
       />
     );
 
+    // Initially 2 suggestions
+    expect(screen.getByText("Task Suggestions (2)")).toBeTruthy();
+
     fireEvent.click(screen.getByTestId("accept-button-0"));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("suggestion-0")).toBeNull();
+      // After accepting, only 1 suggestion remains
+      expect(screen.getByText("Task Suggestions (1)")).toBeTruthy();
     });
 
     // Verify POST was called
     const postCall = fetchMock.mock.calls.find(
-      (call) => call[1]?.method === "POST"
+      (call: unknown[]) => (call[1] as RequestInit)?.method === "POST"
     );
     expect(postCall).toBeTruthy();
 
-    const body = JSON.parse(postCall![1]!.body as string);
+    const body = JSON.parse((postCall![1] as RequestInit)!.body as string);
     expect(body.title).toBe("Implement authentication");
     expect(body.description).toBe("Add user login and registration");
     expect(body.checklist).toHaveLength(3);
@@ -248,12 +260,15 @@ describe("SuggestionDraftList", () => {
       />
     );
 
-    expect(screen.getByTestId("suggestion-0")).toBeTruthy();
+    expect(screen.getByText("Task Suggestions (2)")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("reject-button-0"));
 
-    expect(screen.queryByTestId("suggestion-0")).toBeNull();
+    // After rejecting, only 1 suggestion remains (the second one is now at index 0)
     expect(screen.getByText("Task Suggestions (1)")).toBeTruthy();
+    // The remaining suggestion should be "Setup database" (the second one)
+    const titleInput = screen.getByTestId("suggestion-title-0") as HTMLInputElement;
+    expect(titleInput.value).toBe("Setup database");
   });
 
   test("calls onComplete when all suggestions are processed", async () => {
@@ -404,7 +419,8 @@ describe("SuggestionDraftList", () => {
     expect(rejectButton.disabled).toBe(true);
 
     await waitFor(() => {
-      expect(screen.queryByTestId("suggestion-0")).toBeNull();
+      // After processing, only 1 suggestion remains
+      expect(screen.getByText("Task Suggestions (1)")).toBeTruthy();
     });
   });
 

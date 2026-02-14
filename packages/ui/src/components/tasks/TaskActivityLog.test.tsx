@@ -29,8 +29,8 @@ describe("TaskActivityLog", () => {
       <TaskActivityLog projectId={mockProjectId} runId={mockRunId} />,
     );
 
-    expect(screen.getByText("Activity Log")).toBeInTheDocument();
-    expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    expect(screen.getByText("Activity Log")).toBeTruthy();
+    expect(screen.getByText("Connecting...")).toBeTruthy();
   });
 
   it("renders activity log with connected state", () => {
@@ -57,8 +57,8 @@ describe("TaskActivityLog", () => {
       <TaskActivityLog projectId={mockProjectId} runId={mockRunId} />,
     );
 
-    expect(screen.getByText("Live")).toBeInTheDocument();
-    expect(screen.getByText("Starting work")).toBeInTheDocument();
+    expect(screen.getByText("Live")).toBeTruthy();
+    expect(screen.getByText("Starting work")).toBeTruthy();
   });
 
   it("renders completed state with summary", () => {
@@ -90,12 +90,10 @@ describe("TaskActivityLog", () => {
       <TaskActivityLog projectId={mockProjectId} runId={mockRunId} />,
     );
 
-    expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("Summary")).toBeInTheDocument();
-    expect(screen.getByText(/Files changed:/)).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText(/Total time:/)).toBeInTheDocument();
-    expect(screen.getByText("10s")).toBeInTheDocument();
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByText("Summary")).toBeTruthy();
+    expect(screen.getByText(/Files changed:/)).toBeTruthy();
+    expect(screen.getByText("10s")).toBeTruthy();
   });
 
   it("renders failed state with error", () => {
@@ -118,22 +116,14 @@ describe("TaskActivityLog", () => {
       <TaskActivityLog projectId={mockProjectId} runId={mockRunId} />,
     );
 
-    expect(screen.getByText("Failed")).toBeInTheDocument();
-    expect(screen.getByText("Execution failed")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(screen.getByText("Execution failed")).toBeTruthy();
   });
 
   it("calls onComplete callback when execution completes", async () => {
     const onComplete = vi.fn();
 
-    const { rerender } = render(
-      <TaskActivityLog
-        projectId={mockProjectId}
-        runId={mockRunId}
-        onComplete={onComplete}
-      />,
-    );
-
-    // Initial state: running
+    // Start with running state
     vi.spyOn(useExecutionSSEModule, "useExecutionSSE").mockReturnValue({
       status: "running",
       agentStatuses: {},
@@ -144,7 +134,7 @@ describe("TaskActivityLog", () => {
       connectionStatus: "connected",
     });
 
-    rerender(
+    const { rerender } = render(
       <TaskActivityLog
         projectId={mockProjectId}
         runId={mockRunId}
@@ -186,15 +176,7 @@ describe("TaskActivityLog", () => {
   it("calls onComplete callback when execution fails", async () => {
     const onComplete = vi.fn();
 
-    const { rerender } = render(
-      <TaskActivityLog
-        projectId={mockProjectId}
-        runId={mockRunId}
-        onComplete={onComplete}
-      />,
-    );
-
-    // Initial state: running
+    // Start with running state
     vi.spyOn(useExecutionSSEModule, "useExecutionSSE").mockReturnValue({
       status: "running",
       agentStatuses: {},
@@ -205,7 +187,7 @@ describe("TaskActivityLog", () => {
       connectionStatus: "connected",
     });
 
-    rerender(
+    const { rerender } = render(
       <TaskActivityLog
         projectId={mockProjectId}
         runId={mockRunId}

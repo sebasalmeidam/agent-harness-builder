@@ -4,21 +4,19 @@ import { app } from "../app.js";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
-
 let tempDir: string;
 let projectPath: string;
 
+const mockCreate = vi.fn();
+
 // Mock the Anthropic SDK
 vi.mock("@anthropic-ai/sdk", () => {
-  const mockCreate = vi.fn();
   return {
     default: vi.fn().mockImplementation(() => ({
       messages: {
         create: mockCreate,
       },
     })),
-    __mockCreate: mockCreate,
   };
 });
 
@@ -38,11 +36,6 @@ afterEach(async () => {
   delete process.env["ANTHROPIC_API_KEY"];
   await rm(tempDir, { recursive: true, force: true });
 });
-
-function getMockCreate() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (Anthropic as any).__mockCreate;
-}
 
 describe("POST /api/projects/:id/initialize", () => {
   it("returns 404 when project does not exist", async () => {
@@ -120,7 +113,7 @@ describe("POST /api/projects/:id/initialize", () => {
       },
     ];
 
-    getMockCreate().mockResolvedValue({
+    mockCreate.mockResolvedValue({
       content: [
         {
           type: "tool_use",
@@ -163,7 +156,7 @@ describe("POST /api/projects/:id/initialize", () => {
     expect(res.body.suggestions[0].checklist).toHaveLength(2);
 
     // Verify the SDK was called with correct parameters
-    expect(getMockCreate()).toHaveBeenCalledWith(
+    expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "claude-sonnet-4-20250514",
         messages: expect.arrayContaining([
@@ -183,7 +176,7 @@ describe("POST /api/projects/:id/initialize", () => {
     process.env["ANTHROPIC_API_KEY"] = "test-api-key";
 
     // Mock timeout by simulating an AbortError
-    getMockCreate().mockRejectedValue(
+    mockCreate.mockRejectedValue(
       Object.assign(new Error("The operation was aborted"), {
         name: "AbortError",
       })
@@ -209,7 +202,7 @@ describe("POST /api/projects/:id/initialize", () => {
     process.env["ANTHROPIC_API_KEY"] = "test-api-key";
 
     // Mock invalid response
-    getMockCreate().mockResolvedValue({
+    mockCreate.mockResolvedValue({
       content: [
         {
           type: "text",
@@ -264,7 +257,7 @@ describe("Directory analysis", () => {
     );
 
     // Mock successful API response
-    getMockCreate().mockResolvedValue({
+    mockCreate.mockResolvedValue({
       content: [
         {
           type: "tool_use",
@@ -297,7 +290,7 @@ describe("Directory analysis", () => {
     expect(res.status).toBe(200);
 
     // Verify the prompt contains expected content
-    const call = getMockCreate().mock.calls[0];
+    const call = mockCreate.mock.calls[0];
     const prompt = call[0].messages[0].content;
 
     expect(prompt).toContain("Test directory analysis");
