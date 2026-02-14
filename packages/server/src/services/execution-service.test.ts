@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -652,7 +652,7 @@ describe("Phase 3: Task-Level Execution", () => {
         session_id: "session-1",
       };
     }
-    executeWithSdkMock.mockImplementation((params) => {
+    executeWithSdkMock.mockImplementation((params: { prompt: string }) => {
       capturedPrompt = params.prompt;
       return mockGenerator() as never;
     });
@@ -699,7 +699,7 @@ describe("Phase 3: Task-Level Execution", () => {
         session_id: "session-1",
       };
     }
-    executeWithSdkMock.mockImplementation((params) => {
+    executeWithSdkMock.mockImplementation((params: { prompt: string }) => {
       capturedPrompt = params.prompt;
       return mockGenerator() as never;
     });
@@ -739,7 +739,7 @@ describe("Phase 3: Task-Level Execution", () => {
         session_id: "session-1",
       };
     }
-    executeWithSdkMock.mockImplementation((params) => {
+    executeWithSdkMock.mockImplementation((params: { cwd: string }) => {
       capturedCwd = params.cwd;
       return mockGenerator() as never;
     });
@@ -784,7 +784,7 @@ describe("Phase 3: Task-Level Execution", () => {
         session_id: "session-1",
       };
     }
-    executeWithSdkMock.mockImplementation((params) => {
+    executeWithSdkMock.mockImplementation((params: { cwd: string }) => {
       capturedCwd = params.cwd;
       return mockGenerator() as never;
     });
@@ -823,7 +823,7 @@ describe("Phase 3: Task-Level Execution", () => {
         session_id: "session-1",
       };
     }
-    executeWithSdkMock.mockImplementation((params) => {
+    executeWithSdkMock.mockImplementation((params: { tools: string[] }) => {
       capturedTools = params.tools;
       return mockGenerator() as never;
     });

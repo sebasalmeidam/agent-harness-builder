@@ -1,9 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Mock the runtime package to prevent real SDK calls in execution tests
+vi.mock("@agent-harness/runtime", async () => {
+  const actual = await vi.importActual("@agent-harness/runtime");
+  return {
+    ...actual,
+    executeWithSdk: vi.fn(),
+  };
+});
 
 let tempDir: string;
 let projectPath: string;
@@ -312,6 +321,179 @@ describe("DELETE /api/projects/:id/tasks/:taskId", () => {
     const res = await request(app).delete(`/api/projects/${projectId}/tasks/nonexistent-id`);
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Task not found" });
+  });
+});
+
+describe("POST /api/projects/:id/tasks/:taskId/execute", () => {
+  it("returns 400 when task has no team assigned", async () => {
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .send({ title: "Task without team" });
+
+    const taskId = createRes.body.id;
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/execute`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("no team assigned");
+  });
+
+  it("returns 400 when task status is running", async () => {
+    // Create task with team
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .send({ title: "Running task" });
+
+    const taskId = createRes.body.id;
+
+    // Assign team
+    await request(app)
+      .put(`/api/projects/${projectId}/tasks/${taskId}`)
+      .send({ teamId: "test-team" });
+
+    // Manually set status to running (simulating ongoing execution)
+    const taskModule = await import("../services/task-service.js");
+    await taskModule.update(projectId, taskId, { status: "running" });
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/execute`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("cannot be executed in status: running");
+  });
+
+  it("returns 400 when task status is done", async () => {
+    // Create task with team
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .send({ title: "Done task" });
+
+    const taskId = createRes.body.id;
+
+    // Assign team
+    await request(app)
+      .put(`/api/projects/${projectId}/tasks/${taskId}`)
+      .send({ teamId: "test-team" });
+
+    // Manually set status to done
+    const taskModule = await import("../services/task-service.js");
+    await taskModule.update(projectId, taskId, { status: "done" });
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/execute`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("cannot be executed in status: done");
+  });
+
+  it("returns 404 when task does not exist", async () => {
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/nonexistent-task/execute`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toContain("Task not found");
+  });
+
+  it("returns runId on successful execution trigger", async () => {
+    // Create a team first
+    const teamModule = await import("../services/team-service.js");
+    await teamModule.create({ name: "Test Team", description: "A test team" });
+    const team = await teamModule.get("test-team");
+    await teamModule.update("test-team", {
+      ...team!,
+      agents: [
+        {
+          id: "agent-1",
+          name: "Lead Agent",
+          emoji: "👨‍💼",
+          role: "Tech Lead",
+          goal: "Coordinate the team",
+          skills: ["architecture"],
+          skillIds: [],
+          practices: [],
+          position: { x: 0, y: 0 },
+        },
+      ],
+    });
+
+    // Create task with team
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .send({
+        title: "Executable task",
+        description: "Task description",
+        checklist: [
+          { id: "1", description: "Step 1", completed: false },
+          { id: "2", description: "Step 2", completed: false },
+        ],
+      });
+
+    const taskId = createRes.body.id;
+
+    // Assign team
+    await request(app)
+      .put(`/api/projects/${projectId}/tasks/${taskId}`)
+      .send({ teamId: "test-team" });
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/execute`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.runId).toBeDefined();
+    expect(typeof res.body.runId).toBe("string");
+
+    // Verify task status was updated to running
+    const taskRes = await request(app).get(`/api/projects/${projectId}/tasks/${taskId}`);
+    expect(taskRes.body.status).toBe("running");
+  });
+
+  it("creates run record with taskId field", async () => {
+    // Create a team first
+    const teamModule = await import("../services/team-service.js");
+    await teamModule.create({ name: "Run Team", description: "A test team" });
+    const team = await teamModule.get("run-team");
+    await teamModule.update("run-team", {
+      ...team!,
+      agents: [
+        {
+          id: "agent-1",
+          name: "Lead Agent",
+          emoji: "👨‍💼",
+          role: "Tech Lead",
+          goal: "Coordinate the team",
+          skills: [],
+          skillIds: [],
+          practices: [],
+          position: { x: 0, y: 0 },
+        },
+      ],
+    });
+
+    // Create task with team
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .send({ title: "Task for run record test" });
+
+    const taskId = createRes.body.id;
+
+    // Assign team
+    await request(app)
+      .put(`/api/projects/${projectId}/tasks/${taskId}`)
+      .send({ teamId: "run-team" });
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/execute`);
+
+    expect(res.status).toBe(200);
+    const runId = res.body.runId;
+
+    // Verify run record has taskId field
+    const runModule = await import("../services/run-service.js");
+    const run = await runModule.get(projectId, runId);
+    expect(run).not.toBeNull();
+    expect(run!.taskId).toBe(taskId);
+    expect(run!.projectId).toBe(projectId);
   });
 });
 
