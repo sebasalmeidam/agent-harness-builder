@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Users, FolderKanban } from 'lucide-react';
+import { Home, Users, FolderKanban, Sparkles } from 'lucide-react';
 
 interface NavItem {
   to: string;
@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { to: '/', icon: <Home size={20} />, label: 'Home' },
   { to: '/projects', icon: <FolderKanban size={20} />, label: 'Projects' },
   { to: '/teams', icon: <Users size={20} />, label: 'Teams' },
+  { to: '/skills', icon: <Sparkles size={20} />, label: 'Skills' },
 ];
 
 export default function Sidebar({
