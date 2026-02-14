@@ -30,6 +30,10 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Path editing state
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [savingPath, setSavingPath] = useState(false);
+
   // Task selection state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskListKey, setTaskListKey] = useState(0);
@@ -300,31 +304,43 @@ export default function ProjectDetailPage() {
             type="text"
             className="flex-1 rounded-md border border-border bg-bg-secondary px-3 py-1.5 font-body text-sm font-mono text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             data-testid="project-path"
-            value={project.path || ""}
+            value={editingPath ?? project.path ?? ""}
             placeholder="/absolute/path/to/project"
-            onChange={(e) => setProject({ ...project, path: e.target.value })}
-            onBlur={async () => {
-              const trimmed = (project.path || "").trim();
-              if (!trimmed) return;
-              try {
-                const res = await fetch(`/api/projects/${project.id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ path: trimmed }),
-                });
-                if (!res.ok) {
-                  const data = await res.json();
-                  setSaveMessage({ type: "error", text: data.error || "Failed to update path" });
-                } else {
-                  const updated = await res.json();
-                  setProject(updated);
-                  setSaveMessage({ type: "success", text: "Path updated" });
-                }
-              } catch {
-                setSaveMessage({ type: "error", text: "Failed to update path" });
-              }
-            }}
+            onChange={(e) => setEditingPath(e.target.value)}
           />
+          {editingPath !== null && editingPath !== project.path && (
+            <button
+              className="rounded-md bg-primary px-3 py-1.5 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              disabled={savingPath}
+              onClick={async () => {
+                const trimmed = editingPath.trim();
+                if (!trimmed) return;
+                setSavingPath(true);
+                try {
+                  const res = await fetch(`/api/projects/${project.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: trimmed }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    setSaveMessage({ type: "error", text: data.error || "Failed to update path" });
+                  } else {
+                    const updated = await res.json();
+                    setProject(updated);
+                    setEditingPath(null);
+                    setSaveMessage({ type: "success", text: "Path updated. New tasks will use this directory." });
+                  }
+                } catch {
+                  setSaveMessage({ type: "error", text: "Failed to update path" });
+                } finally {
+                  setSavingPath(false);
+                }
+              }}
+            >
+              {savingPath ? "Saving..." : "Save"}
+            </button>
+          )}
         </div>
         <p className="mt-1 font-body text-xs text-text-secondary">
           Absolute path to the project directory. Created automatically if it doesn't exist.
