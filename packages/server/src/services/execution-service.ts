@@ -277,7 +277,11 @@ export async function startTaskRun(
   runEmitters.set(runId, emitter);
 
   // Start asynchronous execution (fire-and-forget)
-  executeTaskRun(run, translatedTeam, harness).catch((err: unknown) => {
+  const taskOptions: StartRunOptions = {
+    taskDescription: task.description || task.title,
+    checklist: task.checklist?.map((item) => item.description) ?? [],
+  };
+  executeTaskRun(run, translatedTeam, harness, taskOptions).catch((err: unknown) => {
     handleRunError(run, err);
   });
 
@@ -693,9 +697,10 @@ async function completeRun(
 async function executeTaskRun(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> }
+  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> },
+  options?: StartRunOptions
 ): Promise<void> {
-  await executeRun(run, translatedTeam, harness, undefined);
+  await executeRun(run, translatedTeam, harness, options);
 }
 
 /**
@@ -925,17 +930,24 @@ async function tryRealSdkExecution(
     if (!project) {
       return { executed: false };
     }
-    const projectDir = `${process.env["HARNESS_DATA_DIR"]}/projects/${project.id}`;
-    const workspaceDir = `${projectDir}/workspace`;
+    // Use project's configured path as working directory.
+    // Falls back to internal data dir if no path is set.
+    const { join } = await import("node:path");
+    const { homedir } = await import("node:os");
+    const dataDir = process.env["HARNESS_DATA_DIR"] ?? join(homedir(), ".agent-harness");
+    const internalProjectDir = join(dataDir, "projects", project.id);
 
-    // Use workspace directory if it exists, otherwise use project directory
-    let cwd = projectDir;
+    let cwd = project.path || internalProjectDir;
+
+    // Ensure the cwd exists
     try {
       const fs = await import("node:fs/promises");
-      await fs.access(workspaceDir);
-      cwd = workspaceDir;
+      await fs.mkdir(cwd, { recursive: true });
     } catch {
-      // Workspace doesn't exist, use project directory
+      // If we can't create it, fall back to internal dir
+      cwd = internalProjectDir;
+      const fs = await import("node:fs/promises");
+      await fs.mkdir(cwd, { recursive: true }).catch(() => {});
     }
 
     // Resolve tools for the lead agent based on skills
