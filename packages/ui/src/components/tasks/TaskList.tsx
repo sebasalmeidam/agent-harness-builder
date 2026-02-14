@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Clock, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface ChecklistItem {
   id: string;
@@ -25,6 +26,14 @@ interface TeamSummary {
   agentEmojis: string[];
 }
 
+interface RunSummary {
+  id: string;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt: string | null;
+  costUsd?: number | null;
+}
+
 interface TaskListProps {
   projectId: string;
   onTaskSelect?: (taskId: string) => void;
@@ -44,6 +53,8 @@ export default function TaskList({
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Runs per task: taskId -> RunSummary[]
+  const [taskRuns, setTaskRuns] = useState<Record<string, RunSummary[]>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
 
@@ -89,6 +100,28 @@ export default function TaskList({
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Fetch runs for all tasks
+  useEffect(() => {
+    if (tasks.length === 0) return;
+
+    async function fetchAllRuns() {
+      const runsMap: Record<string, RunSummary[]> = {};
+      await Promise.all(
+        tasks.map(async (task) => {
+          try {
+            const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}/runs`);
+            if (res.ok) {
+              runsMap[task.id] = await res.json();
+            }
+          } catch { /* ignore */ }
+        }),
+      );
+      setTaskRuns(runsMap);
+    }
+
+    fetchAllRuns();
+  }, [tasks, projectId]);
 
   // Create task
   async function handleCreateTask() {
@@ -155,6 +188,24 @@ export default function TaskList({
     if (!teamId) return "No team";
     const team = teams.find((t) => t.id === teamId);
     return team ? team.name : "Unknown team";
+  }
+
+  // Format date compactly
+  function formatDate(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Get run status badge
+  function getRunBadge(status: RunSummary["status"]) {
+    switch (status) {
+      case "running":
+        return { label: "Running", className: "bg-info-light text-info animate-pulse" };
+      case "completed":
+        return { label: "Done", className: "bg-success-light text-success" };
+      case "failed":
+        return { label: "Failed", className: "bg-red-50 text-red-600" };
+    }
   }
 
   // Get status badge color
@@ -290,6 +341,35 @@ export default function TaskList({
                     {task.checklist.length} done
                   </span>
                 </div>
+
+                {/* Runs for this task */}
+                {(taskRuns[task.id] ?? []).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {(taskRuns[task.id] ?? []).slice(0, 3).map((run) => {
+                      const badge = getRunBadge(run.status);
+                      return (
+                        <Link
+                          key={run.id}
+                          to={`/projects/${projectId}/runs/${run.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 rounded border border-border/50 px-2 py-1 text-xs transition-colors hover:border-primary/50 hover:bg-bg-secondary"
+                        >
+                          <span className={`inline-block rounded-full px-1.5 py-0.5 font-body text-[10px] font-medium ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                          <span className="flex items-center gap-1 text-text-secondary">
+                            <Clock className="h-3 w-3" />
+                            {formatDate(run.startedAt)}
+                          </span>
+                          {run.costUsd != null && (
+                            <span className="text-text-secondary">${run.costUsd.toFixed(2)}</span>
+                          )}
+                          <ExternalLink className="ml-auto h-3 w-3 text-text-muted" />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <button

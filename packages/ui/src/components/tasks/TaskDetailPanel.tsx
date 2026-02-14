@@ -4,6 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
 import TaskActivityLog from "./TaskActivityLog";
+import TeamProgress from "../execution/TeamProgress";
+import type { AgentInfo } from "../execution/TeamProgress";
+import type { AgentStatus } from "../../hooks/useExecutionSSE";
 
 interface Task {
   id: string;
@@ -81,6 +84,10 @@ export default function TaskDetailPanel({
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
 
+  // Team agents and status for live display
+  const [teamAgents, setTeamAgents] = useState<AgentInfo[]>([]);
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
+
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -144,6 +151,71 @@ export default function TaskDetailPanel({
 
     fetchRuns();
   }, [taskId, projectId]);
+
+  // Load team agents when teamId changes
+  useEffect(() => {
+    const teamId = editTeamId || task?.teamId;
+    if (!teamId) {
+      setTeamAgents([]);
+      return;
+    }
+
+    async function fetchTeamAgents() {
+      try {
+        const res = await fetch(`/api/teams/${teamId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const agents: AgentInfo[] = (data.agents ?? []).map(
+            (a: { id: string; name: string; emoji: string }) => ({
+              id: a.id,
+              name: a.name,
+              emoji: a.emoji,
+            }),
+          );
+          setTeamAgents(agents);
+        }
+      } catch { /* ignore */ }
+    }
+
+    fetchTeamAgents();
+  }, [editTeamId, task?.teamId]);
+
+  // Load agent statuses from the latest run (or active run)
+  useEffect(() => {
+    const activeRunId = runId || (runs.length > 0 ? runs[0].id : null);
+    if (!activeRunId) {
+      setAgentStatuses({});
+      return;
+    }
+
+    async function fetchRunStatuses() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/runs/${activeRunId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const statuses = data.agentStatuses ?? {};
+
+          // Add Orchestrator to teamAgents if present
+          if ("Orchestrator" in statuses) {
+            setTeamAgents((prev) => {
+              if (prev.some((a) => a.name === "Orchestrator")) return prev;
+              return [{ id: "orchestrator", name: "Orchestrator", emoji: "🎯" }, ...prev];
+            });
+          }
+
+          setAgentStatuses(statuses);
+        }
+      } catch { /* ignore */ }
+    }
+
+    fetchRunStatuses();
+
+    // Poll while task is running
+    if (task?.status === "running") {
+      const interval = setInterval(fetchRunStatuses, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [runId, runs, projectId, task?.status]);
 
   // Fetch execution prompt when toggled
   const fetchPrompt = useCallback(async () => {
@@ -474,6 +546,16 @@ export default function TaskDetailPanel({
         {saving && (
           <div className="mt-4 font-body text-xs text-text-secondary">
             Saving...
+          </div>
+        )}
+
+        {/* Team Agent Status */}
+        {teamAgents.length > 0 && Object.keys(agentStatuses).length > 0 && (
+          <div className="mt-4">
+            <h4 className="mb-2 font-body text-sm font-medium text-text-secondary">
+              Team Progress
+            </h4>
+            <TeamProgress agents={teamAgents} agentStatuses={agentStatuses} />
           </div>
         )}
 
