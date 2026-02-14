@@ -201,9 +201,19 @@ export default function ExecutionPage() {
         if (res.ok) {
           const data = await res.json();
           setProjectName(data.name);
-          // If project has a teamId, fetch team to get agent info
-          if (data.teamId) {
-            const teamRes = await fetch(`/api/teams/${data.teamId}`);
+          // Get teamId: prefer project, fall back to run record
+          let teamIdToUse = data.teamId;
+          if (!teamIdToUse && runId) {
+            try {
+              const rRes = await fetch(`/api/projects/${projectId}/runs/${runId}`);
+              if (rRes.ok) {
+                const rData = await rRes.json();
+                teamIdToUse = rData.teamId;
+              }
+            } catch { /* ignore */ }
+          }
+          if (teamIdToUse) {
+            const teamRes = await fetch(`/api/teams/${teamIdToUse}`);
             if (teamRes.ok) {
               const teamData = await teamRes.json();
               setTeamName(teamData.name ?? "");
