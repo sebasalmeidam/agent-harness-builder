@@ -1228,6 +1228,43 @@ async function handleAssistantMessage(
       const toolName = block.name;
       const toolInput = block.input as Record<string, unknown>;
 
+      // Detect Task tool delegation and update teammate status
+      if (toolName === "Task") {
+        const delegatedAgent = typeof toolInput["agent"] === "string"
+          ? toolInput["agent"]
+          : typeof toolInput["description"] === "string"
+            ? detectAgentFromDescription(toolInput["description"], run)
+            : null;
+
+        if (delegatedAgent) {
+          // Store the active delegation for matching with tool_result
+          (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation = {
+            agent: delegatedAgent,
+            toolUseId: block.id,
+          };
+
+          // Find emoji for this agent
+          const delegatedEmoji = Object.keys(run.agentStatuses).includes(delegatedAgent)
+            ? "" : "";
+
+          // Mark delegated agent as working
+          updateAgentStatus(run, delegatedAgent, "working", delegatedEmoji);
+
+          // Add handoff activity entry
+          addActivityEntry(run, {
+            timestamp: new Date().toISOString(),
+            agentId,
+            agentEmoji,
+            agentName,
+            message: `Delegating work to ${delegatedAgent}`,
+            type: "handoff",
+          });
+
+          await runService.save(run);
+          return;
+        }
+      }
+
       // Create activity entry for tool use
       const toolMessage = `Using tool: ${toolName}`;
       addActivityEntry(run, {
@@ -1273,6 +1310,29 @@ async function handleUserMessage(
   if (userMsg.role === "user" && Array.isArray(userMsg.content)) {
     for (const block of userMsg.content) {
       if (typeof block === "object" && block.type === "tool_result") {
+        // Check if this is a Task tool result (agent completed delegation)
+        const delegation = (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation;
+        if (delegation && block.tool_use_id === delegation.toolUseId) {
+          // Mark delegated agent as done
+          updateAgentStatus(run, delegation.agent, "done", "");
+
+          // Add completion activity for the delegated agent
+          addActivityEntry(run, {
+            timestamp: new Date().toISOString(),
+            agentId: delegation.agent,
+            agentEmoji: "",
+            agentName: delegation.agent,
+            message: "Work completed",
+            type: "complete",
+          });
+
+          // Clear the active delegation
+          (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation = undefined;
+
+          await runService.save(run);
+          continue;
+        }
+
         // Tool result - add as action entry
         const resultContent = typeof block.content === "string"
           ? block.content
@@ -1289,6 +1349,22 @@ async function handleUserMessage(
       }
     }
   }
+}
+
+/**
+ * Attempts to detect which agent is being delegated to from the Task description.
+ * Matches against known agent names in the run's agentStatuses.
+ */
+function detectAgentFromDescription(description: string, run: ExecutionRun): string | null {
+  const agentNames = Object.keys(run.agentStatuses).filter((name) => name !== "Orchestrator");
+  const descLower = description.toLowerCase();
+
+  for (const name of agentNames) {
+    if (descLower.includes(name.toLowerCase())) {
+      return name;
+    }
+  }
+  return null;
 }
 
 /**
