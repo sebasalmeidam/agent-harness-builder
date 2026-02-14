@@ -24,7 +24,20 @@ function getParam(
 router.post("/", async (req, res) => {
   try {
     const projectId = getParam(req.params, "id");
-    const { runId } = await executionService.startRun(projectId);
+
+    // Extract optional task-level parameters from request body
+    const taskDescription = typeof req.body?.taskDescription === "string"
+      ? req.body.taskDescription
+      : undefined;
+    const checklist = Array.isArray(req.body?.checklist)
+      ? req.body.checklist.filter((item: unknown) => typeof item === "string")
+      : undefined;
+
+    const options = taskDescription || checklist
+      ? { taskDescription, checklist }
+      : undefined;
+
+    const { runId } = await executionService.startRun(projectId, options);
 
     // Fetch the initial run record to return status and startedAt
     const run = executionService.getActiveRun(runId);

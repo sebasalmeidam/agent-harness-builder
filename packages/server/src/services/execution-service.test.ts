@@ -590,3 +590,218 @@ describe("SDK message mapping", () => {
     expect(errorEntries.length).toBeGreaterThan(0);
   });
 });
+
+describe("Phase 3: Task-Level Execution", () => {
+  it("constructs prompt from taskDescription and checklist", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to capture the prompt parameter
+    let capturedPrompt: string | undefined;
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockImplementation((params) => {
+      capturedPrompt = params.prompt;
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project", {
+      taskDescription: "Implement user authentication",
+      checklist: ["Add login form", "Add password validation", "Add session management"],
+    });
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(capturedPrompt).toBeDefined();
+    expect(capturedPrompt).toContain("Task: Implement user authentication");
+    expect(capturedPrompt).toContain("Checklist:");
+    expect(capturedPrompt).toContain("- [ ] Add login form");
+    expect(capturedPrompt).toContain("- [ ] Add password validation");
+    expect(capturedPrompt).toContain("- [ ] Add session management");
+    expect(capturedPrompt).toContain("Complete all checklist items");
+  });
+
+  it("uses project spec as prompt when no taskDescription provided (backward compatible)", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to capture the prompt parameter
+    let capturedPrompt: string | undefined;
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockImplementation((params) => {
+      capturedPrompt = params.prompt;
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(capturedPrompt).toBeDefined();
+    expect(capturedPrompt).toBe("Build a todo app with TypeScript");
+  });
+
+  it("resolves working directory to workspace subdirectory when it exists", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+    const fs = await import("node:fs/promises");
+
+    // Mock SDK to capture the cwd parameter
+    let capturedCwd: string | undefined;
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockImplementation((params) => {
+      capturedCwd = params.cwd;
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+
+    // Create workspace directory
+    const projectDir = `${tempDir}/projects/test-project`;
+    const workspaceDir = `${projectDir}/workspace`;
+    await fs.mkdir(workspaceDir, { recursive: true });
+
+    await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(capturedCwd).toBeDefined();
+    expect(capturedCwd).toBe(workspaceDir);
+  });
+
+  it("resolves working directory to project directory when workspace does not exist", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to capture the cwd parameter
+    let capturedCwd: string | undefined;
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockImplementation((params) => {
+      capturedCwd = params.cwd;
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(capturedCwd).toBeDefined();
+    expect(capturedCwd).toBe(`${tempDir}/projects/test-project`);
+  });
+
+  it("passes agent skills to resolveTools", async () => {
+    const { executeWithSdk, resolveTools } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to capture the tools parameter
+    let capturedTools: string[] | undefined;
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockImplementation((params) => {
+      capturedTools = params.tools;
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(capturedTools).toBeDefined();
+    // The lead agent has skills: ["architecture", "code review"]
+    // These should be passed to resolveTools which returns the default tool set
+    const expectedTools = resolveTools(["architecture", "code review"]);
+    expect(capturedTools).toEqual(expectedTools);
+  });
+});

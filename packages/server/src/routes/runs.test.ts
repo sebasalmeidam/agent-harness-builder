@@ -178,6 +178,37 @@ describe("POST /api/projects/:id/runs", () => {
     expect(res.body.status).toBe("running");
     expect(res.body.startedAt).toBeDefined();
   });
+
+  it("accepts taskDescription and checklist in request body", async () => {
+    await setupProjectWithTeam();
+
+    const res = await request(app)
+      .post("/api/projects/test-project/runs")
+      .send({
+        taskDescription: "Implement user authentication",
+        checklist: ["Add login form", "Add password validation", "Add session management"],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+    expect(typeof res.body.id).toBe("string");
+    expect(res.body.status).toBe("running");
+    expect(res.body.startedAt).toBeDefined();
+  });
+
+  it("ignores invalid checklist items", async () => {
+    await setupProjectWithTeam();
+
+    const res = await request(app)
+      .post("/api/projects/test-project/runs")
+      .send({
+        taskDescription: "Implement feature",
+        checklist: ["Valid item", 123, null, "Another valid item"],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+  });
 });
 
 describe("GET /api/projects/:id/runs", () => {

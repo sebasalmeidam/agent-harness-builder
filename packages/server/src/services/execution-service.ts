@@ -42,19 +42,30 @@ const runEmitters = new Map<string, EventEmitter>();
 // --- Public API ---
 
 /**
+ * Options for starting an execution run.
+ */
+export interface StartRunOptions {
+  taskDescription?: string;
+  checklist?: string[];
+}
+
+/**
  * Starts a new execution run for a project.
  *
  * Validates that the project exists, has a team assigned, and has a non-empty spec.
  * Loads the team, exports the harness, translates it, creates the initial run record,
  * and begins asynchronous execution.
  *
+ * @param projectId - The project ID to execute
+ * @param options - Optional task-level parameters (taskDescription, checklist)
  * @returns The run ID of the newly created run.
  * @throws Error with code "NOT_FOUND" if the project does not exist.
  * @throws Error with code "NO_TEAM" if the project has no assigned team.
  * @throws Error with code "NO_SPEC" if the project spec is empty.
  */
 export async function startRun(
-  projectId: string
+  projectId: string,
+  options?: StartRunOptions
 ): Promise<{ runId: string }> {
   // Validate project exists
   const project = await projectService.get(projectId);
@@ -120,7 +131,7 @@ export async function startRun(
   runEmitters.set(runId, emitter);
 
   // Start asynchronous execution (fire-and-forget)
-  executeRun(run, translatedTeam, harness.agents).catch((err: unknown) => {
+  executeRun(run, translatedTeam, harness, options).catch((err: unknown) => {
     handleRunError(run, err);
   });
 
@@ -319,7 +330,8 @@ async function handleRunError(
 async function executeRun(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harnessAgents: Array<{ id: string; name: string; emoji: string }>
+  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> },
+  options?: StartRunOptions
 ): Promise<void> {
   const startTime = Date.now();
   let iterations = 0;
@@ -329,7 +341,7 @@ async function executeRun(
     // --- Attempt real SDK execution ---
     // Try to import and use the Claude Agent SDK.
     // If it fails (not installed, wrong API, etc.), fall back to simulation.
-    const sdkResult = await tryRealSdkExecution(run, translatedTeam, harnessAgents);
+    const sdkResult = await tryRealSdkExecution(run, translatedTeam, harness.agents, options);
     if (sdkResult.executed) {
       return; // SDK handled everything
     }
@@ -338,8 +350,8 @@ async function executeRun(
 
     // Step 1: Lead agent starts working
     const leadName = translatedTeam.leadAgent.name;
-    const leadEmoji = getAgentEmoji(leadName, harnessAgents);
-    const leadId = getAgentId(leadName, harnessAgents);
+    const leadEmoji = getAgentEmoji(leadName, harness.agents);
+    const leadId = getAgentId(leadName, harness.agents);
 
     updateAgentStatus(run, leadName, "working", leadEmoji);
     addActivityEntry(run, {
@@ -358,8 +370,8 @@ async function executeRun(
     // Step 2: Lead hands off work to each teammate
     for (const teammate of translatedTeam.teammates) {
       const teammateName = teammate.name;
-      const teammateEmoji = getAgentEmoji(teammateName, harnessAgents);
-      const teammateId = getAgentId(teammateName, harnessAgents);
+      const teammateEmoji = getAgentEmoji(teammateName, harness.agents);
+      const teammateId = getAgentId(teammateName, harness.agents);
 
       // Lead hands off to teammate
       addActivityEntry(run, {
@@ -466,7 +478,8 @@ async function executeRun(
 async function tryRealSdkExecution(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harnessAgents: Array<{ id: string; name: string; emoji: string }>
+  harnessAgents: Array<{ id: string; name: string; emoji: string; skills?: string[] }>,
+  options?: StartRunOptions
 ): Promise<{ executed: boolean }> {
   // Gate real SDK execution on API key presence.
   // When the key is not set, return { executed: false } so the caller
@@ -505,11 +518,31 @@ async function tryRealSdkExecution(
 
     // Resolve tools for the lead agent based on skills
     const leadAgentData = harnessAgents.find((a) => a.id === leadId);
-    const skills = leadAgentData ? [] : []; // Skills not yet stored in harness agents, will be Phase 3
+    const skills = leadAgentData ? leadAgentData.skills || [] : [];
     const tools = resolveTools(skills);
 
-    // Build prompt from project spec
-    const prompt = project.spec;
+    // Build prompt from task description + checklist, or fall back to project spec
+    let prompt: string;
+    if (options?.taskDescription) {
+      // Construct task-level prompt
+      const lines: string[] = [];
+      lines.push(`Task: ${options.taskDescription}`);
+
+      if (options.checklist && options.checklist.length > 0) {
+        lines.push("");
+        lines.push("Checklist:");
+        options.checklist.forEach((item) => {
+          lines.push(`- [ ] ${item}`);
+        });
+        lines.push("");
+        lines.push("Complete all checklist items. Verify each item upon completion.");
+      }
+
+      prompt = lines.join("\n");
+    } else {
+      // Backward compatible: use project spec
+      prompt = project.spec;
+    }
 
     // Update agent status to working
     updateAgentStatus(run, leadName, "working", leadEmoji);
