@@ -65,6 +65,7 @@ export interface ExecutionRun {
   files: string[];
   summary: ExecutionSummary | null;
   error: string | null;
+  costUsd?: number | null;
 }
 
 /**

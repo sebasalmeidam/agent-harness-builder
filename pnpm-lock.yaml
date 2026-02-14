@@ -17,9 +17,9 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@anthropic-ai/claude-code':
-        specifier: ^2.1.41
-        version: 2.1.41
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.2.42
+        version: 0.2.42(zod@4.3.6)
     devDependencies:
       vitest:
         specifier: ^3.1.0
@@ -107,10 +107,11 @@ packages:
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
 
-  '@anthropic-ai/claude-code@2.1.41':
-    resolution: {integrity: sha512-fdWv64UZ0BebqDXgSVUQpNiOffOdbA67ZAz7Y06DXAfPOFrsCHJCPyd7u1mld5ELOiBdJnTGhcSY4vGcH7ZYVA==}
+  '@anthropic-ai/claude-agent-sdk@0.2.42':
+    resolution: {integrity: sha512-/CugP7AjP57Dqtl2sbsDtxdbpQoPKIhjyF5WrTViGu4NHQdM+UikrRs4MhZ2jeotiC5R7iK9ZUN9SiBgcZ8oLw==}
     engines: {node: '>=18.0.0'}
-    hasBin: true
+    peerDependencies:
+      zod: ^4.0.0
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
@@ -2119,6 +2120,9 @@ packages:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
     engines: {node: '>=12.7.0'}
@@ -2138,7 +2142,9 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
-  '@anthropic-ai/claude-code@2.1.41':
+  '@anthropic-ai/claude-agent-sdk@0.2.42(zod@4.3.6)':
+    dependencies:
+      zod: 4.3.6
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.33.5
       '@img/sharp-darwin-x64': 0.33.5
@@ -3978,6 +3984,8 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zod@4.3.6: {}
 
   zustand@4.5.7(@types/react@19.2.14)(react@19.2.4):
     dependencies:
