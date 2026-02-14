@@ -7,6 +7,7 @@ import type {
   ActivityEntry,
   ExecutionSummary,
   TranslatedTeam,
+  AgentDefinition,
 } from "@agent-harness/runtime";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
@@ -341,7 +342,7 @@ async function handleRunError(
 async function executeRun(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> },
+  harness: { agents: Array<{ id: string; name: string; emoji: string; role?: string; goal?: string; skills?: string[] }> },
   options?: StartRunOptions
 ): Promise<void> {
   const startTime = Date.now();
@@ -499,7 +500,7 @@ async function executeRun(
 async function tryRealSdkExecution(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harnessAgents: Array<{ id: string; name: string; emoji: string; skills?: string[] }>,
+  harnessAgents: Array<{ id: string; name: string; emoji: string; role?: string; goal?: string; skills?: string[] }>,
   options?: StartRunOptions
 ): Promise<{ executed: boolean }> {
   // Gate real SDK execution on API key presence.
@@ -538,9 +539,29 @@ async function tryRealSdkExecution(
     }
 
     // Resolve tools for the lead agent based on skills
+    // Pass isLead: true to include Task tool for delegation
     const leadAgentData = harnessAgents.find((a) => a.id === leadId);
-    const skills = leadAgentData ? leadAgentData.skills || [] : [];
-    const tools = resolveTools(skills);
+    const skills: string[] = leadAgentData?.skills ?? [];
+    const tools = resolveTools(skills, true);
+
+    // Build agents definition for SDK if teammates exist
+    let agents: Record<string, AgentDefinition> | undefined;
+    if (translatedTeam.teammates.length > 0) {
+      agents = {};
+      for (const teammate of translatedTeam.teammates) {
+        const teammateHarnessAgent = harnessAgents.find((a) => a.name === teammate.name);
+        const teammateSkills: string[] = teammateHarnessAgent?.skills ?? [];
+        const teammateTools = resolveTools(teammateSkills, false);
+
+        const role = teammateHarnessAgent?.role || teammate.name;
+        const goal = teammateHarnessAgent?.goal || "Team member";
+        agents[teammate.name] = {
+          description: `${role}: ${goal}`,
+          prompt: teammate.systemPrompt,
+          tools: teammateTools,
+        };
+      }
+    }
 
     // Build prompt from task description + checklist, or fall back to project spec
     let prompt: string;
@@ -579,6 +600,7 @@ async function tryRealSdkExecution(
       prompt,
       tools,
       maxBudgetUsd: 5.0,
+      agents,
     });
 
     // Process SDK messages

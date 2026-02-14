@@ -834,7 +834,7 @@ describe("Phase 3: Task-Level Execution", () => {
     expect(capturedTools).toBeDefined();
     // The lead agent has skills: ["architecture", "code review"]
     // These should be passed to resolveTools which returns the default tool set
-    const expectedTools = resolveTools(["architecture", "code review"]);
+    const expectedTools = resolveTools(["architecture", "code review"], true);
     expect(capturedTools).toEqual(expectedTools);
   });
 });

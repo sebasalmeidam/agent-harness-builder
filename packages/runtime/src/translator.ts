@@ -201,6 +201,8 @@ function buildWorkflowDescription(
  * - Gate definitions and failure routing rules
  * - Project specification
  * - Instructions to coordinate the team
+ * - Teammates available for delegation with skills and workflow relationships
+ * - Delegation instructions for using the Task tool
  */
 function buildLeadAgentPrompt(
   agent: HarnessAgent,
@@ -213,14 +215,53 @@ function buildLeadAgentPrompt(
 
   const sections: string[] = [basePrompt];
 
-  // Team composition
-  const teamMembers = agents
-    .filter((a) => a.id !== agent.id)
-    .map((a) => `- ${a.name} (${a.role}): ${a.goal}`)
-    .join("\n");
+  // Team composition with skills and workflow relationships
+  const teammates = agents.filter((a) => a.id !== agent.id);
 
-  if (teamMembers.length > 0) {
-    sections.push(`## Team Members\n${teamMembers}`);
+  if (teammates.length > 0) {
+    const teammateDescriptions: string[] = [];
+
+    for (const teammate of teammates) {
+      const lines: string[] = [];
+      lines.push(`### ${teammate.name}`);
+      lines.push(`- **Role:** ${teammate.role}`);
+      lines.push(`- **Goal:** ${teammate.goal}`);
+
+      if (teammate.skills.length > 0) {
+        lines.push(`- **Skills:** ${teammate.skills.join(", ")}`);
+      }
+
+      // Add workflow relationships for this teammate
+      const teammateOutgoing = getOutgoingEdges(agent.id, edges).filter(
+        (e) => e.target === teammate.id
+      );
+      const teammateIncoming = getIncomingEdges(teammate.id, edges).filter(
+        (e) => e.source === agent.id
+      );
+
+      const workflowLines: string[] = [];
+      for (const edge of teammateOutgoing) {
+        workflowLines.push(`You ${describeEdgeType(edge.type)} ${teammate.name}`);
+      }
+      for (const edge of teammateIncoming) {
+        workflowLines.push(`${teammate.name} ${describeEdgeType(edge.type)} you`);
+      }
+
+      if (workflowLines.length > 0) {
+        lines.push(`- **Workflow:** ${workflowLines.join("; ")}`);
+      }
+
+      teammateDescriptions.push(lines.join("\n"));
+    }
+
+    sections.push(
+      `## Teammates Available for Delegation\n\n${teammateDescriptions.join("\n\n")}`
+    );
+
+    // Add delegation instructions
+    sections.push(
+      `## Delegation Instructions\n\nYou can delegate subtasks to your teammates using the Task tool. When delegating:\n- Match the subtask to the teammate whose skills best fit\n- Provide clear, specific instructions in the task description\n- Each teammate will work independently with their own system prompt`
+    );
   }
 
   // Full workflow
