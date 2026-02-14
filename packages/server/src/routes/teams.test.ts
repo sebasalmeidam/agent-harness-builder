@@ -285,6 +285,7 @@ describe("GET /api/teams/:id/harness", () => {
       role: "software-developer",
       goal: "Write clean code",
       skills: ["TypeScript", "React"],
+      skillIds: [],
       practices: ["TDD", "Code review"],
       position: { x: 100, y: 200 },
     });
@@ -295,6 +296,7 @@ describe("GET /api/teams/:id/harness", () => {
       role: "code-reviewer",
       goal: "Ensure quality",
       skills: ["Architecture"],
+      skillIds: [],
       practices: ["SOLID"],
       position: { x: 300, y: 200 },
     });
@@ -384,6 +386,7 @@ describe("POST /api/teams/import", () => {
       role: "project-planner",
       goal: "Plan the project",
       skills: ["Planning", "Coordination"],
+      skillIds: [],
       practices: ["Agile"],
       position: { x: 50, y: 100 },
     });
@@ -394,6 +397,7 @@ describe("POST /api/teams/import", () => {
       role: "software-developer",
       goal: "Build features",
       skills: ["TypeScript"],
+      skillIds: [],
       practices: ["TDD"],
       position: { x: 250, y: 100 },
     });
@@ -467,6 +471,7 @@ describe("POST /api/teams/import", () => {
         role: "business-analyst",
         goal: "Analyze requirements",
         skills: ["Analysis", "Documentation"],
+        skillIds: [],
         practices: ["BDD", "Story mapping"],
         position: { x: 100, y: 150 },
       },
@@ -477,6 +482,7 @@ describe("POST /api/teams/import", () => {
         role: "software-developer",
         goal: "Implement features",
         skills: ["TypeScript", "React"],
+        skillIds: [],
         practices: ["TDD"],
         position: { x: 300, y: 150 },
       },

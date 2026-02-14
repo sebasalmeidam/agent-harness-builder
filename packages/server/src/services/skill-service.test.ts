@@ -91,16 +91,16 @@ describe("Skill Service - create", () => {
       })
     ).rejects.toThrow("A skill with this name already exists");
 
-    await expect(
-      skillService.create({
+    try {
+      await skillService.create({
         name: "UNIQUE SKILL",
         description: "Third",
         instructions: "Third instructions",
-      })
-    ).rejects.toThrowError((err: Error & { code?: string }) => {
-      expect(err.code).toBe("DUPLICATE");
-      return true;
-    });
+      });
+      expect.fail("Should have thrown");
+    } catch (err: unknown) {
+      expect((err as Error & { code?: string }).code).toBe("DUPLICATE");
+    }
   });
 });
 
@@ -211,14 +211,14 @@ describe("Skill Service - update", () => {
       instructions: "Second",
     });
 
-    await expect(
-      skillService.update(second.id, {
+    try {
+      await skillService.update(second.id, {
         name: "First Skill",
-      })
-    ).rejects.toThrowError((err: Error & { code?: string }) => {
-      expect(err.code).toBe("DUPLICATE");
-      return true;
-    });
+      });
+      expect.fail("Should have thrown");
+    } catch (err: unknown) {
+      expect((err as Error & { code?: string }).code).toBe("DUPLICATE");
+    }
   });
 
   it("allows updating a skill to the same name (case-insensitive)", async () => {
