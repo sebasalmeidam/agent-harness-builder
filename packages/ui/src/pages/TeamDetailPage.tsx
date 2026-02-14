@@ -30,6 +30,7 @@ interface TeamAgent {
   skillIds: string[];
   practices: string[];
   position: { x: number; y: number };
+  model?: string;
 }
 
 interface TeamEdge {
@@ -63,6 +64,7 @@ function agentsToNodes(agents: TeamAgent[]): Node[] {
       skills: agent.skills,
       skillIds: agent.skillIds ?? [],
       practices: agent.practices,
+      model: agent.model,
     },
   }));
 }
@@ -93,6 +95,7 @@ export function nodesToAgents(nodes: Node[]): TeamAgent[] {
     skillIds: (node.data as AgentNodeData).skillIds ?? [],
     practices: (node.data as AgentNodeData).practices,
     position: { x: node.position.x, y: node.position.y },
+    model: (node.data as AgentNodeData).model,
   }));
 }
 

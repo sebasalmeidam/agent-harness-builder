@@ -14,6 +14,7 @@ export interface Agent {
   skillIds: string[];
   practices: string[];
   position: { x: number; y: number };
+  model?: string;
 }
 
 export interface EdgeGate {
@@ -95,6 +96,7 @@ export async function list(): Promise<TeamSummary[]> {
       team.agents = team.agents.map((agent) => ({
         ...agent,
         skillIds: agent.skillIds ?? [],
+        model: agent.model ?? "claude-sonnet-4-20250514",
       }));
       summaries.push({
         id: team.id,
@@ -121,6 +123,7 @@ export async function get(id: string): Promise<Team | null> {
     team.agents = team.agents.map((agent) => ({
       ...agent,
       skillIds: agent.skillIds ?? [],
+      model: agent.model ?? "claude-sonnet-4-20250514",
     }));
     return team;
   } catch {

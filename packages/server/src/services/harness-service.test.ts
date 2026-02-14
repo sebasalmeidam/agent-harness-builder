@@ -308,4 +308,98 @@ describe("harness-service", () => {
       ]);
     });
   });
+
+  describe("model field round-trip", () => {
+    it("should export and import model field correctly", async () => {
+      const team = await teamService.create({
+        name: "Team With Models",
+        description: "Test team with agent models",
+      });
+
+      await teamService.update(team.id, {
+        ...team,
+        agents: [
+          {
+            id: "agent-1",
+            name: "Agent One",
+            emoji: "🤖",
+            role: "Developer",
+            goal: "Build features",
+            skills: [],
+            skillIds: [],
+            practices: [],
+            position: { x: 100, y: 100 },
+            model: "claude-opus-4-20250514",
+          },
+          {
+            id: "agent-2",
+            name: "Agent Two",
+            emoji: "🔍",
+            role: "Reviewer",
+            goal: "Review code",
+            skills: [],
+            skillIds: [],
+            practices: [],
+            position: { x: 300, y: 100 },
+            model: "claude-haiku-3-5-20241022",
+          },
+        ],
+      });
+
+      // Export harness
+      const harness = await harnessService.exportHarness(team.id);
+
+      expect(harness.agents).toHaveLength(2);
+      expect(harness.agents[0].model).toBe("claude-opus-4-20250514");
+      expect(harness.agents[1].model).toBe("claude-haiku-3-5-20241022");
+
+      // Import harness as new team
+      const importedTeam = await harnessService.importHarness({
+        ...harness,
+        name: "Imported Team",
+      });
+
+      expect(importedTeam.agents).toHaveLength(2);
+      expect(importedTeam.agents[0].model).toBe("claude-opus-4-20250514");
+      expect(importedTeam.agents[1].model).toBe("claude-haiku-3-5-20241022");
+    });
+
+    it("should preserve undefined model field through export/import", async () => {
+      const team = await teamService.create({
+        name: "Team Without Models",
+        description: "Test team",
+      });
+
+      await teamService.update(team.id, {
+        ...team,
+        agents: [
+          {
+            id: "agent-1",
+            name: "Agent",
+            emoji: "🤖",
+            role: "Role",
+            goal: "Goal",
+            skills: [],
+            skillIds: [],
+            practices: [],
+            position: { x: 0, y: 0 },
+          },
+        ],
+      });
+
+      // Export harness
+      const harness = await harnessService.exportHarness(team.id);
+
+      // Model should be undefined or the default applied by team-service
+      expect(harness.agents[0].model).toBeDefined();
+
+      // Import harness
+      const importedTeam = await harnessService.importHarness({
+        ...harness,
+        name: "Imported Team",
+      });
+
+      expect(importedTeam.agents[0].model).toBeDefined();
+    });
+  });
 });

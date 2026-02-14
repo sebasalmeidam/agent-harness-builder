@@ -8,6 +8,7 @@ export interface AgentNodeData {
   skills: string[];
   skillIds: string[];
   practices: string[];
+  model?: string;
   [key: string]: unknown;
 }
 

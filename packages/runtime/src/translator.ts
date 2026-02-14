@@ -279,7 +279,7 @@ export function translateHarness(
   const leadAgent: TranslatedAgent = {
     name: leadHarnessAgent.name,
     systemPrompt: leadPrompt,
-    model: DEFAULT_MODEL,
+    model: leadHarnessAgent.model ?? DEFAULT_MODEL,
   };
 
   // Build teammates (all agents except the lead)
@@ -288,7 +288,7 @@ export function translateHarness(
     .map((a) => ({
       name: a.name,
       systemPrompt: buildAgentPrompt(a, harness.agents, harness.edges),
-      model: DEFAULT_MODEL,
+      model: a.model ?? DEFAULT_MODEL,
     }));
 
   return {
