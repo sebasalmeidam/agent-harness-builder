@@ -8,6 +8,15 @@ vi.mock("./git-service.js", () => ({
   cloneRepository: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+// Mock the runtime package to prevent real SDK calls
+vi.mock("@agent-harness/runtime", async () => {
+  const actual = await vi.importActual("@agent-harness/runtime");
+  return {
+    ...actual,
+    executeWithSdk: vi.fn(),
+  };
+});
+
 import * as executionService from "./execution-service.js";
 import * as runService from "./run-service.js";
 import * as projectService from "./project-service.js";
@@ -383,5 +392,201 @@ describe("simulated execution completion", () => {
 
     const handoffs = run!.activityLog.filter((e) => e.type === "handoff");
     expect(handoffs.length).toBeGreaterThan(0);
+  });
+});
+
+describe("SDK message mapping", () => {
+  it("creates ActivityEntry for assistant message with text content", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return an assistant message with text
+    async function* mockGenerator() {
+      yield {
+        type: "assistant",
+        message: {
+          id: "msg_1",
+          type: "message",
+          role: "assistant",
+          content: [{ type: "text", text: "Analyzing the task..." }],
+          model: "claude-sonnet-4-20250514",
+          stop_reason: null,
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+        parent_tool_use_id: null,
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+      yield {
+        type: "result",
+        subtype: "success",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        result: "Task completed",
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-2",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+
+    // Should have action entries from the assistant message
+    const actionEntries = run!.activityLog.filter((e) => e.type === "action");
+    expect(actionEntries.length).toBeGreaterThan(0);
+    expect(actionEntries.some((e) => e.message.includes("Analyzing"))).toBe(true);
+  });
+
+  it("adds file to run.files when tool_use is Write", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return tool_use for Write tool
+    async function* mockGenerator() {
+      yield {
+        type: "assistant",
+        message: {
+          id: "msg_1",
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_1",
+              name: "Write",
+              input: { file_path: "/test/output.ts", content: "console.log('test');" },
+            },
+          ],
+          model: "claude-sonnet-4-20250514",
+          stop_reason: null,
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+        parent_tool_use_id: null,
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+      yield {
+        type: "result",
+        subtype: "success",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        result: "File written",
+        stop_reason: "end_turn",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-2",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.files).toContain("/test/output.ts");
+  });
+
+  it("completes run as completed when result message has subtype success", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return success result
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        result: "All tasks completed successfully",
+        stop_reason: "end_turn",
+        total_cost_usd: 0.05,
+        usage: { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("completed");
+    expect(run!.error).toBeNull();
+    expect(run!.costUsd).toBe(0.05);
+  });
+
+  it("completes run as failed when result message has error subtype", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return error result
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "error_during_execution",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: true,
+        num_turns: 2,
+        stop_reason: "error",
+        total_cost_usd: 0.03,
+        usage: { input_tokens: 50, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+        errors: ["Tool execution failed", "Permission denied"],
+        uuid: "uuid-1",
+        session_id: "session-1",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("failed");
+    expect(run!.error).toContain("Tool execution failed");
+    expect(run!.error).toContain("Permission denied");
+    expect(run!.costUsd).toBe(0.03);
+
+    // Should have an error activity entry
+    const errorEntries = run!.activityLog.filter((e) => e.type === "error");
+    expect(errorEntries.length).toBeGreaterThan(0);
   });
 });
