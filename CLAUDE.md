@@ -41,6 +41,23 @@ See `.claude/AVAILABLE-TOOLS.md` for full reference. Quick summary:
 
 When stuck on a UI bug, use `agent-browser errors` and `agent-browser console`. When stuck on an API or library question, use Ref or Exa.
 
+## What to Test
+
+Only test what is **indispensable**. This is a hackathon project — speed matters more than coverage.
+
+**DO test:**
+- Core runtime logic (SDK executor, translator) — if this breaks, nothing works
+- Critical data transformations that are hard to debug visually
+
+**DO NOT test:**
+- CRUD services (create/read/update/delete) — these are trivial JSON file ops
+- Express routes — just hit them manually with curl or the UI
+- React components — verify visually with the running app
+- Utility functions with obvious behavior
+- Anything you can verify faster by clicking through the UI
+
+**Rule of thumb:** If a bug would be caught in < 30 seconds by using the app, don't write a test for it.
+
 ## Bash Rules
 
 - Execute commands one by one (no `&&`, `;`, `|`)
