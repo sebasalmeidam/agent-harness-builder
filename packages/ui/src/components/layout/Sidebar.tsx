@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Users, FolderKanban } from 'lucide-react';
+import { Home, Users, FolderKanban, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface NavItem {
   to: string;
@@ -10,8 +10,7 @@ interface NavItem {
 
 interface SidebarProps {
   expanded?: boolean;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
+  onToggle?: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -22,34 +21,40 @@ const navItems: NavItem[] = [
 
 export default function Sidebar({
   expanded = false,
-  onMouseEnter,
-  onMouseLeave,
+  onToggle,
 }: SidebarProps) {
   return (
     <aside
       className={`fixed left-0 top-0 flex h-screen flex-col border-r border-border bg-bg-primary py-4 transition-all duration-200 ease-in-out ${
         expanded ? 'w-64 items-start px-3' : 'w-16 items-center'
       }`}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
     >
-      <div
-        className={`mb-4 flex h-10 items-center font-heading text-sm font-bold text-primary overflow-hidden whitespace-nowrap ${
-          expanded ? 'w-full px-1' : 'w-10 justify-center'
-        }`}
-      >
-        <span
-          className={`transition-opacity duration-200 ${expanded ? 'opacity-0 w-0' : 'opacity-100'}`}
-          aria-hidden={expanded}
+      <div className={`mb-2 flex ${expanded ? 'w-full items-center justify-between px-1' : 'w-10 flex-col items-center gap-2'}`}>
+        <div
+          className={`flex h-10 items-center font-heading text-sm font-bold text-primary overflow-hidden whitespace-nowrap ${
+            expanded ? 'flex-1' : 'w-10 justify-center'
+          }`}
         >
-          AH
-        </span>
-        <span
-          className={`transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0'}`}
-          aria-hidden={!expanded}
+          <span
+            className={`transition-opacity duration-200 ${expanded ? 'opacity-0 w-0' : 'opacity-100'}`}
+            aria-hidden={expanded}
+          >
+            AH
+          </span>
+          <span
+            className={`transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0'}`}
+            aria-hidden={!expanded}
+          >
+            Agent Harness
+          </span>
+        </div>
+        <button
+          onClick={onToggle}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors"
+          aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          Agent Harness
-        </span>
+          {expanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </button>
       </div>
 
       <div className={`mb-4 h-px bg-border ${expanded ? 'w-full' : 'w-8'}`} />

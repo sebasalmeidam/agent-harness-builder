@@ -5,8 +5,7 @@ import Sidebar from './Sidebar';
 
 function renderSidebar(props: {
   expanded?: boolean;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
+  onToggle?: () => void;
   route?: string;
 } = {}) {
   const { route = '/', ...sidebarProps } = props;
@@ -44,14 +43,24 @@ describe('Sidebar', () => {
     expect(teamsLabel.className).toContain('w-0');
   });
 
-  test('expands to 256px width and shows text labels on mouse enter', () => {
-    const handleMouseEnter = vi.fn();
-    renderSidebar({ onMouseEnter: handleMouseEnter });
+  test('toggle button renders with correct icon based on expanded state', () => {
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <Sidebar expanded={false} />
+      </MemoryRouter>,
+    );
 
-    const aside = screen.getByRole('complementary');
-    fireEvent.mouseEnter(aside);
+    const toggleButtonCollapsed = screen.getByLabelText('Expand sidebar');
+    expect(toggleButtonCollapsed).toBeTruthy();
 
-    expect(handleMouseEnter).toHaveBeenCalledTimes(1);
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <Sidebar expanded={true} />
+      </MemoryRouter>,
+    );
+
+    const toggleButtonExpanded = screen.getByLabelText('Collapse sidebar');
+    expect(toggleButtonExpanded).toBeTruthy();
   });
 
   test('when expanded, sidebar has w-64 class and text labels are visible', () => {
@@ -71,14 +80,14 @@ describe('Sidebar', () => {
     expect(teamsLabel.className).toContain('opacity-100');
   });
 
-  test('returns to collapsed state on mouse leave', () => {
-    const handleMouseLeave = vi.fn();
-    renderSidebar({ expanded: true, onMouseLeave: handleMouseLeave });
+  test('clicking toggle button calls onToggle callback', () => {
+    const handleToggle = vi.fn();
+    renderSidebar({ onToggle: handleToggle });
 
-    const aside = screen.getByRole('complementary');
-    fireEvent.mouseLeave(aside);
+    const toggleButton = screen.getByLabelText('Expand sidebar');
+    fireEvent.click(toggleButton);
 
-    expect(handleMouseLeave).toHaveBeenCalledTimes(1);
+    expect(handleToggle).toHaveBeenCalledTimes(1);
   });
 
   test('logo text changes to Agent Harness when expanded and AH when collapsed', () => {
