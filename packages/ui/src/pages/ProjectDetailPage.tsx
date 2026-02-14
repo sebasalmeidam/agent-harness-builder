@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Trash2, FolderOpen, AlertTriangle } from "lucide-react";
 import TaskList from "../components/tasks/TaskList";
+import TaskDetailPanel from "../components/tasks/TaskDetailPanel";
 
 interface Project {
   id: string;
@@ -23,6 +24,12 @@ export default function ProjectDetailPage() {
 
   // Task selection state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskListKey, setTaskListKey] = useState(0);
+
+  // Refresh task list (called after task detail panel saves)
+  const handleTaskUpdate = useCallback(() => {
+    setTaskListKey((prev) => prev + 1);
+  }, []);
 
   // Save message for inline editing feedback
   const [saveMessage, setSaveMessage] = useState<{
@@ -274,15 +281,33 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tasks section */}
-      <div className="rounded-lg border border-border bg-bg-primary p-6">
-        <h2 className="mb-4 font-heading text-lg font-semibold text-black">
-          Tasks
-        </h2>
-        <TaskList
-          projectId={project.id}
-          onTaskSelect={setSelectedTaskId}
-          selectedTaskId={selectedTaskId}
-        />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Task List */}
+        <div className="rounded-lg border border-border bg-bg-primary p-6">
+          <h2 className="mb-4 font-heading text-lg font-semibold text-black">
+            Tasks
+          </h2>
+          <TaskList
+            key={taskListKey}
+            projectId={project.id}
+            onTaskSelect={setSelectedTaskId}
+            selectedTaskId={selectedTaskId}
+          />
+        </div>
+
+        {/* Task Detail Panel */}
+        {selectedTaskId && (
+          <div>
+            <h2 className="mb-4 font-heading text-lg font-semibold text-black">
+              Task Details
+            </h2>
+            <TaskDetailPanel
+              taskId={selectedTaskId}
+              projectId={project.id}
+              onUpdate={handleTaskUpdate}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
