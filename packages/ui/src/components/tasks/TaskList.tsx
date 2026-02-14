@@ -29,12 +29,14 @@ interface TaskListProps {
   projectId: string;
   onTaskSelect?: (taskId: string) => void;
   selectedTaskId?: string | null;
+  onTaskCountChange?: (count: number) => void;
 }
 
 export default function TaskList({
   projectId,
   onTaskSelect,
   selectedTaskId,
+  onTaskCountChange,
 }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
@@ -56,12 +58,13 @@ export default function TaskList({
       }
       const data: Task[] = await res.json();
       setTasks(data);
+      onTaskCountChange?.(data.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, onTaskCountChange]);
 
   // Fetch teams once for name lookup
   useEffect(() => {
@@ -106,7 +109,11 @@ export default function TaskList({
       }
 
       const newTask: Task = await res.json();
-      setTasks((prev) => [...prev, newTask]);
+      setTasks((prev) => {
+        const updated = [...prev, newTask];
+        onTaskCountChange?.(updated.length);
+        return updated;
+      });
       setNewTaskTitle("");
       setShowAddForm(false);
     } catch (err) {
@@ -131,7 +138,11 @@ export default function TaskList({
       if (!res.ok) {
         throw new Error(`Failed to delete task: ${res.statusText}`);
       }
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setTasks((prev) => {
+        const updated = prev.filter((t) => t.id !== taskId);
+        onTaskCountChange?.(updated.length);
+        return updated;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete task");
     } finally {
