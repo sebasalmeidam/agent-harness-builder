@@ -956,11 +956,18 @@ async function tryRealSdkExecution(
       await fs.mkdir(cwd, { recursive: true }).catch(() => {});
     }
 
-    // Resolve tools for the lead agent based on skills
-    // Pass isLead: true to include Task tool for delegation
-    const leadAgentData = harnessAgents.find((a) => a.id === leadId);
-    const skills: string[] = leadAgentData?.skills ?? [];
-    const tools = resolveTools(skills, true);
+    // Resolve tools for the lead agent
+    // If the lead is the Orchestrator (synthetic), restrict to Task tool only
+    // Otherwise, resolve based on skills + Task tool for delegation
+    const isOrchestrator = leadName === "Orchestrator";
+    let tools: string[];
+    if (isOrchestrator) {
+      tools = ["Task"];
+    } else {
+      const leadAgentData = harnessAgents.find((a) => a.id === leadId);
+      const skills: string[] = leadAgentData?.skills ?? [];
+      tools = resolveTools(skills, true);
+    }
 
     // Build agents definition for SDK if teammates exist
     let agents: Record<string, AgentDefinition> | undefined;

@@ -415,12 +415,19 @@ function buildOrchestratorPrompt(
 
   sections.push("# Role: Orchestrator");
   sections.push(
-    "## Goal\nYou coordinate the team to complete the task. You do NOT write code or make changes yourself. Your job is to:\n" +
+    "## Goal\nYou are a COORDINATOR ONLY. You manage the team workflow.\n\n" +
+    "## CRITICAL RULES\n" +
+    "- **NEVER use Read, Write, Edit, Bash, Glob, Grep, or any file/code tools directly**\n" +
+    "- **ONLY use the Task tool to delegate ALL work to team members**\n" +
+    "- You do NOT write code, read files, run commands, or make any changes yourself\n" +
+    "- Your ONLY tool is Task. Use it to assign work to the right team member.\n" +
+    "- If you need to verify something, delegate a verification task to the appropriate agent\n\n" +
+    "## Your Workflow\n" +
     "1. Analyze the task and checklist\n" +
-    "2. Delegate work to team members following the workflow order\n" +
-    "3. Pass context from one agent's output to the next agent\n" +
-    "4. After all agents complete, validate that every checklist item is done\n" +
-    "5. If something is missing, re-delegate to the appropriate agent\n" +
+    "2. Use the Task tool to delegate work to each team member in the execution order\n" +
+    "3. When delegating, provide clear instructions and context from previous agents\n" +
+    "4. After all agents complete, delegate a final verification task to the reviewer\n" +
+    "5. If verification fails, re-delegate to the appropriate agent with feedback\n" +
     "6. Report final status when the checklist is fully complete"
   );
 
