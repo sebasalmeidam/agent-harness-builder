@@ -11,6 +11,7 @@ import DashboardPage from './pages/DashboardPage';
 import ExecutionPage from './pages/ExecutionPage';
 import LandingPage from './pages/LandingPage';
 import SkillsPage from './pages/SkillsPage';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="projects/:id/runs/:runId" element={<ExecutionPage />} />
           <Route path="skills" element={<SkillsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </ErrorBoundary>
