@@ -14,6 +14,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import * as projectService from "./project-service.js";
 import * as runService from "./run-service.js";
 import { exportHarness } from "./harness-service.js";
+import * as progressService from "./progress-service.js";
 
 // --- Types ---
 
@@ -269,6 +270,16 @@ async function completeRun(
   // Persist final run record
   await runService.save(run);
 
+  // Update progress file with final status
+  const finalMessage = status === "completed"
+    ? `Execution completed successfully. Files changed: ${summary.filesChanged}, Total time: ${summary.totalTime}s, Iterations: ${summary.iterations}, Errors: ${summary.errors}`
+    : `Execution failed: ${errorMessage || "Unknown error"}`;
+  await progressService.appendProgressUpdate(
+    run.projectId,
+    run.id,
+    finalMessage
+  );
+
   // Emit run status event
   emitRunEvent(run, {
     type: "run-status",
@@ -338,6 +349,16 @@ async function executeRun(
   let errorCount = 0;
 
   try {
+    // Initialize progress file at execution start
+    const taskDescription = options?.taskDescription || "Execute project specification";
+    const checklist = options?.checklist || [];
+    await progressService.initProgressFile(
+      run.projectId,
+      run.id,
+      taskDescription,
+      checklist
+    );
+
     // --- Attempt real SDK execution ---
     // Try to import and use the Claude Agent SDK.
     // If it fails (not installed, wrong API, etc.), fall back to simulation.
@@ -535,13 +556,16 @@ async function tryRealSdkExecution(
           lines.push(`- [ ] ${item}`);
         });
         lines.push("");
-        lines.push("Complete all checklist items. Verify each item upon completion.");
+        lines.push("After completing your work, verify each checklist item:");
+        lines.push("1. For each item, confirm it is done by checking the relevant files or outputs.");
+        lines.push("2. Report the status of each checklist item (done/not done) with a brief explanation.");
+        lines.push("3. Update the progress file with your verification results.");
       }
 
       prompt = lines.join("\n");
     } else {
       // Backward compatible: use project spec
-      prompt = project.spec;
+      prompt = project.spec || "Execute the project tasks";
     }
 
     // Update agent status to working
@@ -775,6 +799,13 @@ async function handleAssistantMessage(
           addFileChange(run, filePath);
         }
       }
+
+      // Append progress update for tool completion
+      await progressService.appendProgressUpdate(
+        run.projectId,
+        run.id,
+        `Tool completed: ${toolName}`
+      );
     }
   }
 }
