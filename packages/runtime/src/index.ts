@@ -13,3 +13,6 @@ export type {
 } from "./types.js";
 
 export { translateHarness, identifyLeadAgent } from "./translator.js";
+
+export { executeWithSdk, resolveTools } from "./sdk-executor.js";
+export type { ExecuteWithSdkParams } from "./sdk-executor.js";

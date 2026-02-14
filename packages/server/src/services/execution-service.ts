@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { translateHarness } from "@agent-harness/runtime";
+import { translateHarness, executeWithSdk, resolveTools } from "@agent-harness/runtime";
 import type {
   ExecutionRun,
   AgentStatus,
@@ -8,6 +8,9 @@ import type {
   ExecutionSummary,
   TranslatedTeam,
 } from "@agent-harness/runtime";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import * as projectService from "./project-service.js";
 import * as runService from "./run-service.js";
 import { exportHarness } from "./harness-service.js";
@@ -39,19 +42,30 @@ const runEmitters = new Map<string, EventEmitter>();
 // --- Public API ---
 
 /**
+ * Options for starting an execution run.
+ */
+export interface StartRunOptions {
+  taskDescription?: string;
+  checklist?: string[];
+}
+
+/**
  * Starts a new execution run for a project.
  *
  * Validates that the project exists, has a team assigned, and has a non-empty spec.
  * Loads the team, exports the harness, translates it, creates the initial run record,
  * and begins asynchronous execution.
  *
+ * @param projectId - The project ID to execute
+ * @param options - Optional task-level parameters (taskDescription, checklist)
  * @returns The run ID of the newly created run.
  * @throws Error with code "NOT_FOUND" if the project does not exist.
  * @throws Error with code "NO_TEAM" if the project has no assigned team.
  * @throws Error with code "NO_SPEC" if the project spec is empty.
  */
 export async function startRun(
-  projectId: string
+  projectId: string,
+  options?: StartRunOptions
 ): Promise<{ runId: string }> {
   // Validate project exists
   const project = await projectService.get(projectId);
@@ -117,7 +131,7 @@ export async function startRun(
   runEmitters.set(runId, emitter);
 
   // Start asynchronous execution (fire-and-forget)
-  executeRun(run, translatedTeam, harness.agents).catch((err: unknown) => {
+  executeRun(run, translatedTeam, harness, options).catch((err: unknown) => {
     handleRunError(run, err);
   });
 
@@ -150,6 +164,30 @@ export function offRunEvent(runId: string, callback: RunEventCallback): void {
   if (emitter) {
     emitter.off("event", callback);
   }
+}
+
+// --- Internal helpers ---
+
+/**
+ * Finds the emoji for a harness agent by name.
+ */
+function getAgentEmoji(
+  agentName: string,
+  harnessAgents: Array<{ id: string; name: string; emoji: string }>
+): string {
+  const agent = harnessAgents.find((a) => a.name === agentName);
+  return agent?.emoji ?? "";
+}
+
+/**
+ * Finds the agent ID for a harness agent by name.
+ */
+function getAgentId(
+  agentName: string,
+  harnessAgents: Array<{ id: string; name: string; emoji: string }>
+): string {
+  const agent = harnessAgents.find((a) => a.name === agentName);
+  return agent?.id ?? agentName;
 }
 
 // --- Internal execution logic ---
@@ -292,29 +330,18 @@ async function handleRunError(
 async function executeRun(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harnessAgents: Array<{ id: string; name: string; emoji: string }>
+  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> },
+  options?: StartRunOptions
 ): Promise<void> {
   const startTime = Date.now();
   let iterations = 0;
   let errorCount = 0;
 
-  // Helper to find emoji for an agent by name
-  function getAgentEmoji(agentName: string): string {
-    const agent = harnessAgents.find((a) => a.name === agentName);
-    return agent?.emoji ?? "";
-  }
-
-  // Helper to find agent ID by name
-  function getAgentId(agentName: string): string {
-    const agent = harnessAgents.find((a) => a.name === agentName);
-    return agent?.id ?? agentName;
-  }
-
   try {
     // --- Attempt real SDK execution ---
     // Try to import and use the Claude Agent SDK.
     // If it fails (not installed, wrong API, etc.), fall back to simulation.
-    const sdkResult = await tryRealSdkExecution(run, translatedTeam, harnessAgents);
+    const sdkResult = await tryRealSdkExecution(run, translatedTeam, harness.agents, options);
     if (sdkResult.executed) {
       return; // SDK handled everything
     }
@@ -323,8 +350,8 @@ async function executeRun(
 
     // Step 1: Lead agent starts working
     const leadName = translatedTeam.leadAgent.name;
-    const leadEmoji = getAgentEmoji(leadName);
-    const leadId = getAgentId(leadName);
+    const leadEmoji = getAgentEmoji(leadName, harness.agents);
+    const leadId = getAgentId(leadName, harness.agents);
 
     updateAgentStatus(run, leadName, "working", leadEmoji);
     addActivityEntry(run, {
@@ -343,8 +370,8 @@ async function executeRun(
     // Step 2: Lead hands off work to each teammate
     for (const teammate of translatedTeam.teammates) {
       const teammateName = teammate.name;
-      const teammateEmoji = getAgentEmoji(teammateName);
-      const teammateId = getAgentId(teammateName);
+      const teammateEmoji = getAgentEmoji(teammateName, harness.agents);
+      const teammateId = getAgentId(teammateName, harness.agents);
 
       // Lead hands off to teammate
       addActivityEntry(run, {
@@ -444,14 +471,15 @@ async function executeRun(
  * Returns { executed: false } if the SDK is not available, in which case the
  * caller should fall back to simulated execution.
  *
- * This function is structured as a try/catch around a dynamic import so that
+ * This function is structured as a try/catch around the SDK call so that
  * the service does not require the SDK to be installed for testing or
  * development without an API key.
  */
 async function tryRealSdkExecution(
-  _run: ExecutionRun,
-  _translatedTeam: TranslatedTeam,
-  _harnessAgents: Array<{ id: string; name: string; emoji: string }>
+  run: ExecutionRun,
+  translatedTeam: TranslatedTeam,
+  harnessAgents: Array<{ id: string; name: string; emoji: string; skills?: string[] }>,
+  options?: StartRunOptions
 ): Promise<{ executed: boolean }> {
   // Gate real SDK execution on API key presence.
   // When the key is not set, return { executed: false } so the caller
@@ -462,27 +490,343 @@ async function tryRealSdkExecution(
   }
 
   try {
-    // Dynamic import of the Claude Agent SDK
-    // The SDK package (@anthropic-ai/claude-code) provides a programmatic API
-    // for creating and running agent teams.
-    //
-    // When the SDK is properly installed and the ANTHROPIC_API_KEY is set,
-    // this section would:
-    // 1. Create agents from translatedTeam configuration
-    // 2. Set up the lead agent with teammates
-    // 3. Start the team execution with the project spec
-    // 4. Listen to streaming events for agent status changes
-    // 5. Map SDK events to our state machine (idle/working/done/blocked)
-    // 6. Capture file changes from tool_use events
-    //
-    // For now, we return { executed: false } to use the simulation path,
-    // since the Claude Agent SDK's programmatic Agent Teams API is not
-    // yet stable for this use case.
-    return { executed: false };
-  } catch {
-    // SDK not available or import failed -- fall back to simulation
+    const startTime = Date.now();
+
+    // Get lead agent details
+    const leadAgent = translatedTeam.leadAgent;
+    const leadName = leadAgent.name;
+    const leadEmoji = getAgentEmoji(leadName, harnessAgents);
+    const leadId = getAgentId(leadName, harnessAgents);
+
+    // Resolve project working directory
+    const project = await projectService.get(run.projectId);
+    if (!project) {
+      return { executed: false };
+    }
+    const projectDir = `${process.env["HARNESS_DATA_DIR"]}/projects/${project.id}`;
+    const workspaceDir = `${projectDir}/workspace`;
+
+    // Use workspace directory if it exists, otherwise use project directory
+    let cwd = projectDir;
+    try {
+      const fs = await import("node:fs/promises");
+      await fs.access(workspaceDir);
+      cwd = workspaceDir;
+    } catch {
+      // Workspace doesn't exist, use project directory
+    }
+
+    // Resolve tools for the lead agent based on skills
+    const leadAgentData = harnessAgents.find((a) => a.id === leadId);
+    const skills = leadAgentData ? leadAgentData.skills || [] : [];
+    const tools = resolveTools(skills);
+
+    // Build prompt from task description + checklist, or fall back to project spec
+    let prompt: string;
+    if (options?.taskDescription) {
+      // Construct task-level prompt
+      const lines: string[] = [];
+      lines.push(`Task: ${options.taskDescription}`);
+
+      if (options.checklist && options.checklist.length > 0) {
+        lines.push("");
+        lines.push("Checklist:");
+        options.checklist.forEach((item) => {
+          lines.push(`- [ ] ${item}`);
+        });
+        lines.push("");
+        lines.push("Complete all checklist items. Verify each item upon completion.");
+      }
+
+      prompt = lines.join("\n");
+    } else {
+      // Backward compatible: use project spec
+      prompt = project.spec;
+    }
+
+    // Update agent status to working
+    updateAgentStatus(run, leadName, "working", leadEmoji);
+
+    // Call SDK executor
+    const sdkGenerator = executeWithSdk({
+      systemPrompt: leadAgent.systemPrompt,
+      model: leadAgent.model,
+      cwd,
+      prompt,
+      tools,
+      maxBudgetUsd: 5.0,
+    });
+
+    // Process SDK messages
+    let iterationCount = 0;
+    let errorCount = 0;
+
+    try {
+      for await (const message of sdkGenerator) {
+        iterationCount++;
+
+        // Process different message types
+        if (message.type === "assistant") {
+          await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
+        } else if (message.type === "user") {
+          await handleUserMessage(run, message, leadId, leadName, leadEmoji);
+        } else if (message.type === "result") {
+          // Result message indicates execution completion
+          const totalTime = Math.round((Date.now() - startTime) / 1000);
+
+          if (message.subtype === "success") {
+            // Success case
+            const summary: ExecutionSummary = {
+              filesChanged: run.files.length,
+              totalTime,
+              iterations: iterationCount,
+              errors: errorCount,
+            };
+
+            // Store cost if available
+            if (message.total_cost_usd) {
+              run.costUsd = message.total_cost_usd;
+            }
+
+            // Add completion activity entry
+            addActivityEntry(run, {
+              timestamp: new Date().toISOString(),
+              agentId: leadId,
+              agentEmoji: leadEmoji,
+              agentName: leadName,
+              message: message.result || "Work completed successfully",
+              type: "complete",
+            });
+
+            updateAgentStatus(run, leadName, "done", leadEmoji);
+            await completeRun(run, "completed", summary, null);
+          } else {
+            // Error case (subtype !== "success")
+            errorCount++;
+
+            const summary: ExecutionSummary = {
+              filesChanged: run.files.length,
+              totalTime,
+              iterations: iterationCount,
+              errors: errorCount,
+            };
+
+            // Store cost if available
+            if (message.total_cost_usd) {
+              run.costUsd = message.total_cost_usd;
+            }
+
+            // Join all error messages from the errors array
+            const errorMessage = message.errors && message.errors.length > 0
+              ? message.errors.join("; ")
+              : `Execution failed with error: ${message.subtype}`;
+
+            // Add error activity entry
+            addActivityEntry(run, {
+              timestamp: new Date().toISOString(),
+              agentId: leadId,
+              agentEmoji: leadEmoji,
+              agentName: leadName,
+              message: errorMessage,
+              type: "error",
+            });
+
+            updateAgentStatus(run, leadName, "blocked", leadEmoji);
+            await completeRun(run, "failed", summary, errorMessage);
+          }
+
+          // Result message is always the last message, execution is done
+          return { executed: true };
+        }
+
+        // Persist intermediate state periodically
+        if (iterationCount % 10 === 0) {
+          await runService.save(run);
+        }
+      }
+
+      // If we reach here without a result message, something went wrong
+      errorCount++;
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      const summary: ExecutionSummary = {
+        filesChanged: run.files.length,
+        totalTime,
+        iterations: iterationCount,
+        errors: errorCount,
+      };
+
+      await completeRun(run, "failed", summary, "SDK execution ended without result message");
+      return { executed: true };
+    } catch (err: unknown) {
+      // Classify and handle SDK errors
+      errorCount++;
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      const errorMessage = classifyAndFormatSdkError(err);
+
+      // Add error activity entry with clear user-facing message
+      addActivityEntry(run, {
+        timestamp: new Date().toISOString(),
+        agentId: leadId,
+        agentEmoji: leadEmoji,
+        agentName: leadName,
+        message: errorMessage,
+        type: "error",
+      });
+
+      // Update agent status to blocked
+      updateAgentStatus(run, leadName, "blocked", leadEmoji);
+
+      // Complete run as failed
+      const summary: ExecutionSummary = {
+        filesChanged: run.files.length,
+        totalTime,
+        iterations: iterationCount,
+        errors: errorCount,
+      };
+
+      await completeRun(run, "failed", summary, errorMessage);
+      return { executed: true };
+    }
+  } catch (err: unknown) {
+    // Outer catch for non-SDK errors (e.g., project not found)
+    console.error("Unexpected error in SDK execution:", err);
     return { executed: false };
   }
+}
+
+/**
+ * Classifies an SDK error and returns a clear user-facing error message.
+ */
+function classifyAndFormatSdkError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return "An unknown error occurred during execution.";
+  }
+
+  const errorMessage = err.message.toLowerCase();
+
+  // Check for rate limit errors (HTTP 429)
+  if (errorMessage.includes("rate limit") || errorMessage.includes("429") || errorMessage.includes("too many requests")) {
+    return "Rate limit exceeded. Please wait a moment and try again.";
+  }
+
+  // Check for invalid API key errors
+  if (errorMessage.includes("api key") || errorMessage.includes("authentication") || errorMessage.includes("unauthorized") || errorMessage.includes("401")) {
+    return "Invalid or missing Anthropic API key. Please check your ANTHROPIC_API_KEY environment variable.";
+  }
+
+  // Check for network errors
+  if (errorMessage.includes("network") || errorMessage.includes("econnrefused") || errorMessage.includes("timeout") || errorMessage.includes("enotfound")) {
+    return "Network error: Unable to connect to the Anthropic API. Please check your internet connection.";
+  }
+
+  // Check for SDK internal errors
+  if (errorMessage.includes("sdk") || errorMessage.includes("internal error")) {
+    return `SDK error: ${err.message}`;
+  }
+
+  // Generic fallback for unknown errors
+  return `Execution error: ${err.message}`;
+}
+
+/**
+ * Handles an SDK assistant message by extracting text and tool_use content blocks.
+ */
+async function handleAssistantMessage(
+  run: ExecutionRun,
+  message: SDKMessage & { type: "assistant" },
+  agentId: string,
+  agentName: string,
+  agentEmoji: string
+): Promise<void> {
+  const assistantMsg = message.message as BetaMessage;
+
+  // Process each content block
+  for (const block of assistantMsg.content) {
+    if (block.type === "text") {
+      // Text content - add as action entry
+      addActivityEntry(run, {
+        timestamp: new Date().toISOString(),
+        agentId,
+        agentEmoji,
+        agentName,
+        message: block.text,
+        type: "action",
+      });
+    } else if (block.type === "tool_use") {
+      // Tool use - add as action entry and track file changes
+      const toolName = block.name;
+      const toolInput = block.input as Record<string, unknown>;
+
+      // Create activity entry for tool use
+      const toolMessage = `Using tool: ${toolName}`;
+      addActivityEntry(run, {
+        timestamp: new Date().toISOString(),
+        agentId,
+        agentEmoji,
+        agentName,
+        message: toolMessage,
+        type: "action",
+      });
+
+      // Track file changes for Write, Edit, NotebookEdit tools
+      if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
+        const filePath = extractFilePath(toolName, toolInput);
+        if (filePath) {
+          addFileChange(run, filePath);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Handles an SDK user message by extracting tool_result content blocks.
+ */
+async function handleUserMessage(
+  run: ExecutionRun,
+  message: SDKMessage & { type: "user" },
+  agentId: string,
+  agentName: string,
+  agentEmoji: string
+): Promise<void> {
+  const userMsg = message.message as MessageParam;
+
+  // Check if this is a user message with tool results
+  if (userMsg.role === "user" && Array.isArray(userMsg.content)) {
+    for (const block of userMsg.content) {
+      if (typeof block === "object" && block.type === "tool_result") {
+        // Tool result - add as action entry
+        const resultContent = typeof block.content === "string"
+          ? block.content
+          : JSON.stringify(block.content);
+
+        addActivityEntry(run, {
+          timestamp: new Date().toISOString(),
+          agentId,
+          agentEmoji,
+          agentName,
+          message: `Tool result: ${resultContent.slice(0, 200)}${resultContent.length > 200 ? "..." : ""}`,
+          type: "action",
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Extracts the file path from tool input based on tool name.
+ */
+function extractFilePath(toolName: string, input: Record<string, unknown>): string | null {
+  if (toolName === "Write" && typeof input["file_path"] === "string") {
+    return input["file_path"];
+  }
+  if (toolName === "Edit" && typeof input["file_path"] === "string") {
+    return input["file_path"];
+  }
+  if (toolName === "NotebookEdit" && typeof input["notebook_path"] === "string") {
+    return input["notebook_path"];
+  }
+  return null;
 }
 
 // --- Testing utilities ---
