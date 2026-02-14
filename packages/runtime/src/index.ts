@@ -12,7 +12,7 @@ export type {
   ExecutionRunSummary,
 } from "./types.js";
 
-export { translateHarness, identifyLeadAgent } from "./translator.js";
+export { translateHarness, translateHarnessWithOrchestrator, identifyLeadAgent } from "./translator.js";
 
 export { executeWithSdk, resolveTools } from "./sdk-executor.js";
 export type { ExecuteWithSdkParams, AgentDefinition } from "./sdk-executor.js";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { translateHarness, identifyLeadAgent } from "./translator.js";
+import { translateHarness, translateHarnessWithOrchestrator, identifyLeadAgent } from "./translator.js";
 import type { HarnessData, HarnessAgent, HarnessEdge } from "./harness-schema.js";
 // TranslatedTeam type is used implicitly through translateHarness return type
 
@@ -886,5 +886,126 @@ describe("translateHarness", () => {
     const leadPrompt = result.leadAgent.systemPrompt;
     expect(leadPrompt).not.toContain("Teammates Available for Delegation");
     expect(leadPrompt).not.toContain("Delegation Instructions");
+  });
+});
+
+// --- translateHarnessWithOrchestrator tests ---
+
+describe("translateHarnessWithOrchestrator", () => {
+  it("creates a synthetic Orchestrator as lead agent", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Architect", role: "Software Architect" }),
+        makeAgent({ id: "a2", name: "Developer", role: "Full-Stack Developer" }),
+      ],
+      edges: [makeEdge({ source: "a1", target: "a2", type: "passes-work-to" })],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Build a website");
+
+    expect(result.leadAgent.name).toBe("Orchestrator");
+    expect(result.leadAgent.systemPrompt).toContain("# Role: Orchestrator");
+  });
+
+  it("puts ALL agents as teammates (none promoted to lead)", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Architect" }),
+        makeAgent({ id: "a2", name: "Developer" }),
+        makeAgent({ id: "a3", name: "Tech Lead" }),
+      ],
+      edges: [
+        makeEdge({ id: "e1", source: "a1", target: "a2", type: "passes-work-to" }),
+        makeEdge({ id: "e2", source: "a2", target: "a3", type: "passes-work-to" }),
+      ],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Build an app");
+
+    expect(result.teammates).toHaveLength(3);
+    const names = result.teammates.map((t) => t.name);
+    expect(names).toContain("Architect");
+    expect(names).toContain("Developer");
+    expect(names).toContain("Tech Lead");
+  });
+
+  it("includes execution order derived from edges", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Architect" }),
+        makeAgent({ id: "a2", name: "Developer" }),
+        makeAgent({ id: "a3", name: "Tech Lead" }),
+      ],
+      edges: [
+        makeEdge({ id: "e1", source: "a1", target: "a2", type: "passes-work-to" }),
+        makeEdge({ id: "e2", source: "a2", target: "a3", type: "passes-work-to" }),
+      ],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Build an app");
+
+    expect(result.leadAgent.systemPrompt).toContain("Execution Order");
+    expect(result.leadAgent.systemPrompt).toContain("Architect → Developer → Tech Lead");
+  });
+
+  it("includes delegation instructions", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Architect" }),
+        makeAgent({ id: "a2", name: "Developer" }),
+      ],
+      edges: [makeEdge({ source: "a1", target: "a2" })],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Spec");
+
+    expect(result.leadAgent.systemPrompt).toContain("Delegation Instructions");
+    expect(result.leadAgent.systemPrompt).toContain("Task tool");
+  });
+
+  it("includes team member details in orchestrator prompt", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Architect", role: "Software Architect", goal: "Design systems" }),
+        makeAgent({ id: "a2", name: "Developer", role: "Full-Stack Dev", goal: "Write code" }),
+      ],
+      edges: [makeEdge({ source: "a1", target: "a2" })],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Spec");
+    const prompt = result.leadAgent.systemPrompt;
+
+    expect(prompt).toContain("Team Members");
+    expect(prompt).toContain("Software Architect");
+    expect(prompt).toContain("Full-Stack Dev");
+    expect(prompt).toContain("Design systems");
+    expect(prompt).toContain("Write code");
+  });
+
+  it("orchestrator prompt states it should NOT write code", () => {
+    const harness = makeHarness({
+      agents: [makeAgent({ id: "a1", name: "Dev" })],
+      edges: [],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Spec");
+
+    expect(result.leadAgent.systemPrompt).toContain("do NOT write code");
+  });
+
+  it("accepts custom orchestrator model", () => {
+    const harness = makeHarness({
+      agents: [makeAgent({ id: "a1", name: "Dev" })],
+      edges: [],
+    });
+
+    const result = translateHarnessWithOrchestrator(harness, "Spec", "claude-opus-4-20250514");
+
+    expect(result.leadAgent.model).toBe("claude-opus-4-20250514");
+  });
+
+  it("throws on empty agents", () => {
+    const harness = makeHarness({ agents: [], edges: [] });
+    expect(() => translateHarnessWithOrchestrator(harness, "Spec")).toThrow("no agents");
   });
 });

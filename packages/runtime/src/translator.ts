@@ -338,3 +338,212 @@ export function translateHarness(
     workflowDescription,
   };
 }
+
+/**
+ * Translates a HarnessData object into an orchestrator-led team structure.
+ *
+ * Instead of picking a team member as lead, this creates a synthetic
+ * Orchestrator agent that coordinates ALL team members. The orchestrator:
+ * - Reads the task, checklist, and workflow
+ * - Delegates work to team members in the order defined by edges
+ * - Validates the checklist after all agents complete
+ * - Re-delegates if validation fails
+ *
+ * ALL agents from the harness become teammates (none is promoted to lead).
+ *
+ * @param harness - The harness data to translate
+ * @param projectSpec - The project specification text
+ * @param orchestratorModel - Model to use for the orchestrator (optional)
+ * @returns TranslatedTeam with synthetic orchestrator as lead
+ * @throws Error if harness has no agents
+ */
+export function translateHarnessWithOrchestrator(
+  harness: HarnessData,
+  projectSpec: string,
+  orchestratorModel?: string
+): TranslatedTeam {
+  if (harness.agents.length === 0) {
+    throw new Error("Cannot translate harness: no agents defined");
+  }
+
+  const workflowDescription = buildWorkflowDescription(
+    harness.agents,
+    harness.edges
+  );
+
+  // Build orchestrator system prompt
+  const orchestratorPrompt = buildOrchestratorPrompt(
+    harness.agents,
+    harness.edges,
+    projectSpec,
+    workflowDescription
+  );
+
+  const orchestrator: TranslatedAgent = {
+    name: "Orchestrator",
+    systemPrompt: orchestratorPrompt,
+    model: orchestratorModel ?? DEFAULT_MODEL,
+  };
+
+  // ALL agents become teammates
+  const teammates: TranslatedAgent[] = harness.agents.map((a) => ({
+    name: a.name,
+    systemPrompt: buildAgentPrompt(a, harness.agents, harness.edges),
+    model: a.model ?? DEFAULT_MODEL,
+  }));
+
+  return {
+    leadAgent: orchestrator,
+    teammates,
+    workflowDescription,
+  };
+}
+
+/**
+ * Builds the system prompt for the synthetic orchestrator agent.
+ *
+ * The orchestrator does not write code itself. It coordinates the team
+ * by delegating tasks via the Task tool and validating results.
+ */
+function buildOrchestratorPrompt(
+  agents: HarnessAgent[],
+  edges: HarnessEdge[],
+  projectSpec: string,
+  workflowDescription: string
+): string {
+  const sections: string[] = [];
+
+  sections.push("# Role: Orchestrator");
+  sections.push(
+    "## Goal\nYou coordinate the team to complete the task. You do NOT write code or make changes yourself. Your job is to:\n" +
+    "1. Analyze the task and checklist\n" +
+    "2. Delegate work to team members following the workflow order\n" +
+    "3. Pass context from one agent's output to the next agent\n" +
+    "4. After all agents complete, validate that every checklist item is done\n" +
+    "5. If something is missing, re-delegate to the appropriate agent\n" +
+    "6. Report final status when the checklist is fully complete"
+  );
+
+  // Team members
+  const teammateDescriptions: string[] = [];
+  for (const agent of agents) {
+    const lines: string[] = [];
+    lines.push(`### ${agent.name}`);
+    lines.push(`- **Role:** ${agent.role}`);
+    lines.push(`- **Goal:** ${agent.goal}`);
+    if (agent.skills.length > 0) {
+      lines.push(`- **Skills:** ${agent.skills.join(", ")}`);
+    }
+
+    // Workflow relationships
+    const outgoing = edges.filter((e) => e.source === agent.id);
+    const incoming = edges.filter((e) => e.target === agent.id);
+    const relationships: string[] = [];
+    for (const edge of outgoing) {
+      const targetName = agents.find((a) => a.id === edge.target)?.name ?? edge.target;
+      relationships.push(`${describeEdgeType(edge.type)} ${targetName}`);
+    }
+    for (const edge of incoming) {
+      const sourceName = agents.find((a) => a.id === edge.source)?.name ?? edge.source;
+      relationships.push(`receives work from ${sourceName}`);
+    }
+    if (relationships.length > 0) {
+      lines.push(`- **Workflow:** ${relationships.join("; ")}`);
+    }
+
+    teammateDescriptions.push(lines.join("\n"));
+  }
+  sections.push(`## Team Members\n\n${teammateDescriptions.join("\n\n")}`);
+
+  // Workflow
+  sections.push(`## Workflow\n${workflowDescription}`);
+
+  // Determine execution order from edges
+  const executionOrder = deriveExecutionOrder(agents, edges);
+  if (executionOrder.length > 0) {
+    const orderStr = executionOrder
+      .map((id) => agents.find((a) => a.id === id)?.name ?? id)
+      .join(" → ");
+    sections.push(`## Execution Order\n${orderStr}\n\nDelegate to each agent in this order. Wait for each to complete before moving to the next.`);
+  }
+
+  // Delegation instructions
+  sections.push(
+    "## Delegation Instructions\n\n" +
+    "Use the Task tool to delegate work to team members.\n" +
+    "When delegating:\n" +
+    "- Provide clear, specific instructions including what to build/review\n" +
+    "- Include relevant context from previous agents' work\n" +
+    "- For review agents: specify what to review and acceptance criteria\n" +
+    "- If a reviewer rejects work, re-delegate to the original agent with the feedback"
+  );
+
+  // Project specification
+  sections.push(`## Project Specification\n${projectSpec}`);
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Derives a topological execution order from agents and edges.
+ *
+ * Performs a topological sort based on "passes-work-to" edges.
+ * Falls back to the original agent order if no such edges exist
+ * or if the graph has cycles.
+ */
+function deriveExecutionOrder(
+  agents: HarnessAgent[],
+  edges: HarnessEdge[]
+): string[] {
+  const workEdges = edges.filter((e) => e.type === "passes-work-to");
+
+  if (workEdges.length === 0) {
+    return agents.map((a) => a.id);
+  }
+
+  // Build adjacency list and in-degree count
+  const agentIds = new Set(agents.map((a) => a.id));
+  const adj = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+
+  for (const id of agentIds) {
+    adj.set(id, []);
+    inDegree.set(id, 0);
+  }
+
+  for (const edge of workEdges) {
+    if (agentIds.has(edge.source) && agentIds.has(edge.target)) {
+      adj.get(edge.source)!.push(edge.target);
+      inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+    }
+  }
+
+  // Kahn's algorithm for topological sort
+  const queue: string[] = [];
+  for (const [id, degree] of inDegree) {
+    if (degree === 0) {
+      queue.push(id);
+    }
+  }
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    sorted.push(current);
+
+    for (const neighbor of adj.get(current) ?? []) {
+      const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
+      inDegree.set(neighbor, newDegree);
+      if (newDegree === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  // If not all agents were sorted (cycle detected), fall back to original order
+  if (sorted.length !== agentIds.size) {
+    return agents.map((a) => a.id);
+  }
+
+  return sorted;
+}

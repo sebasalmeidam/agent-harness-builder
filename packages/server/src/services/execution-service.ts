@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { translateHarness, executeWithSdk, resolveTools } from "@agent-harness/runtime";
+import { translateHarness, translateHarnessWithOrchestrator, executeWithSdk, resolveTools } from "@agent-harness/runtime";
 import type {
   ExecutionRun,
   AgentStatus,
@@ -99,7 +99,10 @@ export async function startRun(
   const harness = await exportHarness(project.teamId);
 
   // Translate harness to SDK team structures
-  const translatedTeam = translateHarness(harness, project.spec);
+  // Use orchestrator mode when team has multiple agents
+  const translatedTeam = harness.agents.length > 1
+    ? translateHarnessWithOrchestrator(harness, project.spec)
+    : translateHarness(harness, project.spec);
 
   // Generate run ID
   const runId = randomUUID();
@@ -238,7 +241,10 @@ export async function startTaskRun(
   const executionPrompt = composeExecutionPrompt(project, task, team);
 
   // Translate harness with execution prompt
-  const translatedTeam = translateHarness(harness, executionPrompt);
+  // Use orchestrator mode when team has multiple agents
+  const translatedTeam = harness.agents.length > 1
+    ? translateHarnessWithOrchestrator(harness, executionPrompt)
+    : translateHarness(harness, executionPrompt);
 
   // Generate run ID
   const runId = randomUUID();
