@@ -32,6 +32,28 @@ const mockProjectNoEmoji = {
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
 
+const mockTasks = [
+  {
+    id: "task-1",
+    projectId: "test-project",
+    title: "Test Task",
+    description: "A test task",
+    checklist: [],
+    teamId: null,
+    status: "pending",
+  },
+];
+
+const mockTeams = [
+  {
+    id: "team-1",
+    name: "Test Team",
+    description: "A test team",
+    agentCount: 2,
+    agentEmojis: ["👨‍💻", "🧪"],
+  },
+];
+
 function renderProjectDetail(projectId: string) {
   const router = createMemoryRouter(
     [
@@ -117,6 +139,26 @@ beforeEach(() => {
     // DELETE /api/projects/:id
     if (urlStr.includes("/api/projects/") && method === "DELETE") {
       return Promise.resolve(new Response(null, { status: 204 }));
+    }
+
+    // GET /api/projects/:id/tasks
+    if (urlStr.includes("/api/projects/") && urlStr.endsWith("/tasks") && method === "GET") {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockTasks), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    // GET /api/teams
+    if (urlStr.endsWith("/api/teams") && method === "GET") {
+      return Promise.resolve(
+        new Response(JSON.stringify(mockTeams), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     }
 
     return Promise.resolve(
@@ -224,7 +266,7 @@ describe("ProjectDetailPage", () => {
     });
   });
 
-  test("renders Tasks section with empty state", async () => {
+  test("renders Tasks section with TaskList component", async () => {
     renderProjectDetail("test-project");
 
     await waitFor(() => {
@@ -233,8 +275,10 @@ describe("ProjectDetailPage", () => {
       ).toBeTruthy();
     });
 
-    expect(screen.getByTestId("tasks-empty-state")).toBeTruthy();
-    expect(screen.getByText("No tasks yet")).toBeTruthy();
+    // TaskList component should render
+    await waitFor(() => {
+      expect(screen.getByText("Test Task")).toBeTruthy();
+    });
   });
 
   test("does not render spec editor or team section", async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Trash2, FolderOpen, AlertTriangle } from "lucide-react";
+import TaskList from "../components/tasks/TaskList";
 
 interface Project {
   id: string;
@@ -19,6 +20,9 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Task selection state
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // Save message for inline editing feedback
   const [saveMessage, setSaveMessage] = useState<{
@@ -269,14 +273,16 @@ export default function ProjectDetailPage() {
         </p>
       </div>
 
-      {/* Tasks placeholder section */}
+      {/* Tasks section */}
       <div className="rounded-lg border border-border bg-bg-primary p-6">
         <h2 className="mb-4 font-heading text-lg font-semibold text-black">
           Tasks
         </h2>
-        <p className="font-body text-sm text-text-secondary" data-testid="tasks-empty-state">
-          No tasks yet
-        </p>
+        <TaskList
+          projectId={project.id}
+          onTaskSelect={setSelectedTaskId}
+          selectedTaskId={selectedTaskId}
+        />
       </div>
     </div>
   );
