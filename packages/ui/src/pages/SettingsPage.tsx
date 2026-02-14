@@ -5,6 +5,7 @@ import ErrorCard from "../components/ErrorCard";
 interface Settings {
   apiKey: string;
   defaultModel: string;
+  defaultProjectsPath: string;
   hasEnvKey: boolean;
 }
 
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [defaultModel, setDefaultModel] = useState("claude-sonnet-4-20250514");
+  const [defaultProjectsPath, setDefaultProjectsPath] = useState("");
   
   // Save state
   const [saving, setSaving] = useState(false);
@@ -44,6 +46,7 @@ export default function SettingsPage() {
       setSettings(data);
       setApiKey(""); // Don't prefill the masked key
       setDefaultModel(data.defaultModel);
+      setDefaultProjectsPath(data.defaultProjectsPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
     } finally {
@@ -73,8 +76,9 @@ export default function SettingsPage() {
     setTestResult(null);
 
     try {
-      const payload: { apiKey?: string; defaultModel?: string } = {
+      const payload: { apiKey?: string; defaultModel?: string; defaultProjectsPath?: string } = {
         defaultModel,
+        defaultProjectsPath: defaultProjectsPath.trim(),
       };
       
       // Only include apiKey if user entered a new one
@@ -284,6 +288,33 @@ export default function SettingsPage() {
               </select>
               <p className="mt-1 font-body text-xs text-text-secondary">
                 This model will be used for AI generation features when no model is specified.
+              </p>
+            </div>
+          </div>
+
+          {/* Default Projects Path Section */}
+          <div className="mb-8 rounded-lg border border-border bg-bg-primary p-6">
+            <h2 className="mb-4 font-heading text-lg font-semibold text-black">
+              Default Projects Path
+            </h2>
+
+            <div className="mb-4">
+              <label
+                htmlFor="default-projects-path"
+                className="mb-1 block font-body text-sm font-medium text-text-primary"
+              >
+                Path
+              </label>
+              <input
+                id="default-projects-path"
+                type="text"
+                value={defaultProjectsPath}
+                onChange={(e) => setDefaultProjectsPath(e.target.value)}
+                placeholder="/home/user/projects"
+                className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm font-mono text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
+              />
+              <p className="mt-1 font-body text-xs text-text-secondary">
+                Base directory where new projects will be created
               </p>
             </div>
           </div>

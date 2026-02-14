@@ -45,22 +45,31 @@ export async function validateProjectPath(
     };
   }
 
-  // Check if path exists
+  // Try to create the directory if it doesn't exist
+  try {
+    await mkdir(path, { recursive: true });
+  } catch (err) {
+    return {
+      valid: false,
+      error: `Failed to create directory: ${err instanceof Error ? err.message : "Unknown error"}`,
+    };
+  }
+
+  // Verify it's a directory
   let pathStat;
   try {
     pathStat = await stat(path);
   } catch {
     return {
       valid: false,
-      error: "Path does not exist",
+      error: "Failed to access the created directory",
     };
   }
 
-  // Check if path is a directory
   if (!pathStat.isDirectory()) {
     return {
       valid: false,
-      error: "Path must be a directory",
+      error: "Path exists but is not a directory",
     };
   }
 

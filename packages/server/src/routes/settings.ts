@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { isAbsolute } from "node:path";
+import { mkdir } from "node:fs/promises";
 import * as configService from "../services/config-service.js";
 
 const router = Router();
@@ -16,13 +18,14 @@ router.get("/", async (_req, res) => {
 
 // PUT /api/settings - Update settings
 router.put("/", async (req, res) => {
-  const { apiKey, defaultModel } = req.body as {
+  const { apiKey, defaultModel, defaultProjectsPath } = req.body as {
     apiKey?: string;
     defaultModel?: string;
+    defaultProjectsPath?: string;
   };
 
   // Validate that at least one field is provided
-  if (apiKey === undefined && defaultModel === undefined) {
+  if (apiKey === undefined && defaultModel === undefined && defaultProjectsPath === undefined) {
     res.status(400).json({ error: "At least one field must be provided for update" });
     return;
   }
@@ -54,8 +57,36 @@ router.put("/", async (req, res) => {
     }
   }
 
+  // Validate defaultProjectsPath if provided
+  if (defaultProjectsPath !== undefined) {
+    if (typeof defaultProjectsPath !== "string") {
+      res.status(400).json({ error: "Default projects path must be a string" });
+      return;
+    }
+    
+    const trimmedPath = defaultProjectsPath.trim();
+    if (!trimmedPath) {
+      res.status(400).json({ error: "Default projects path cannot be empty" });
+      return;
+    }
+    
+    if (!isAbsolute(trimmedPath)) {
+      res.status(400).json({ error: "Default projects path must be an absolute path" });
+      return;
+    }
+    
+    // Try to create the directory if it doesn't exist
+    try {
+      await mkdir(trimmedPath, { recursive: true });
+    } catch (err) {
+      console.error("Failed to create default projects path:", err);
+      res.status(400).json({ error: "Failed to create or access the specified path" });
+      return;
+    }
+  }
+
   try {
-    await configService.updateSettings({ apiKey, defaultModel });
+    await configService.updateSettings({ apiKey, defaultModel, defaultProjectsPath });
     const settings = await configService.getSettings();
     res.json(settings);
   } catch (err) {

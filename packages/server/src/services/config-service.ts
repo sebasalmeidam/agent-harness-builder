@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 export interface AppConfig {
   apiKey: string;
   defaultModel: string;
+  defaultProjectsPath: string;
 }
 
 // --- Private state ---
@@ -47,12 +48,14 @@ async function loadConfig(): Promise<AppConfig> {
     return {
       apiKey: parsed.apiKey ?? "",
       defaultModel: parsed.defaultModel ?? "claude-sonnet-4-20250514",
+      defaultProjectsPath: parsed.defaultProjectsPath ?? join(homedir(), "projects"),
     };
   } catch {
     // File doesn't exist or is invalid - return defaults
     return {
       apiKey: "",
       defaultModel: "claude-sonnet-4-20250514",
+      defaultProjectsPath: join(homedir(), "projects"),
     };
   }
 }
@@ -111,7 +114,7 @@ export async function getDefaultModel(): Promise<string> {
 /**
  * Gets the full config with the API key masked for display.
  */
-export async function getSettings(): Promise<{ apiKey: string; defaultModel: string; hasEnvKey: boolean }> {
+export async function getSettings(): Promise<{ apiKey: string; defaultModel: string; defaultProjectsPath: string; hasEnvKey: boolean }> {
   const config = await getConfig();
   const envKey = process.env["ANTHROPIC_API_KEY"];
   
@@ -121,6 +124,7 @@ export async function getSettings(): Promise<{ apiKey: string; defaultModel: str
   return {
     apiKey: maskApiKey(activeKey),
     defaultModel: config.defaultModel || "claude-sonnet-4-20250514",
+    defaultProjectsPath: config.defaultProjectsPath || join(homedir(), "projects"),
     hasEnvKey: !!envKey,
   };
 }
@@ -135,6 +139,7 @@ export async function updateSettings(updates: Partial<AppConfig>): Promise<void>
   const newConfig: AppConfig = {
     apiKey: updates.apiKey !== undefined ? updates.apiKey : config.apiKey,
     defaultModel: updates.defaultModel !== undefined ? updates.defaultModel : config.defaultModel,
+    defaultProjectsPath: updates.defaultProjectsPath !== undefined ? updates.defaultProjectsPath : config.defaultProjectsPath,
   };
   
   await saveConfig(newConfig);
@@ -181,6 +186,14 @@ export async function testApiKey(): Promise<{ valid: boolean; error?: string }> 
 export async function hasApiKey(): Promise<boolean> {
   const key = await getApiKey();
   return key.length > 0;
+}
+
+/**
+ * Gets the default projects path.
+ */
+export async function getDefaultProjectsPath(): Promise<string> {
+  const config = await getConfig();
+  return config.defaultProjectsPath || join(homedir(), "projects");
 }
 
 // --- Utilities ---
