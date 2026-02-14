@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Play, ChevronDown, ChevronRight, Clock, DollarSign, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
 import TaskActivityLog from "./TaskActivityLog";
@@ -64,6 +64,7 @@ export default function TaskDetailPanel({
   projectId,
   onUpdate,
 }: TaskDetailPanelProps) {
+  const navigate = useNavigate();
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -314,6 +315,9 @@ export default function TaskDetailPanel({
       // Update task status to running immediately
       setTask({ ...task, status: "running" });
       onUpdate?.();
+
+      // Navigate to the live execution page
+      navigate(`/projects/${projectId}/runs/${data.runId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to execute task");
     } finally {
