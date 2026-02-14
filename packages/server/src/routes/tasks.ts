@@ -1,7 +1,10 @@
 import { Router } from "express";
 import * as taskService from "../services/task-service.js";
 import * as projectService from "../services/project-service.js";
+import * as teamService from "../services/team-service.js";
 import * as executionService from "../services/execution-service.js";
+import * as runService from "../services/run-service.js";
+import { previewExecutionPrompt } from "../services/prompt-composer.js";
 
 const router = Router({ mergeParams: true });
 
@@ -169,6 +172,81 @@ router.post("/:taskId/execute", async (req, res) => {
 
     console.error("Failed to execute task:", err);
     res.status(500).json({ error: "Failed to execute task" });
+  }
+});
+
+// GET /api/projects/:id/tasks/:taskId/runs - List execution runs for a task
+router.get("/:taskId/runs", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+    const taskId = getParam(req.params, "taskId");
+
+    // Verify task exists
+    const task = await taskService.get(projectId, taskId);
+    if (!task) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    // Get all runs for the project, then filter by taskId
+    const allRuns = await runService.list(projectId);
+    
+    // Read full run data to filter by taskId
+    const taskRuns = [];
+    for (const runSummary of allRuns) {
+      const fullRun = await runService.get(projectId, runSummary.id);
+      if (fullRun && fullRun.taskId === taskId) {
+        taskRuns.push({
+          id: fullRun.id,
+          status: fullRun.status,
+          startedAt: fullRun.startedAt,
+          completedAt: fullRun.completedAt,
+          costUsd: fullRun.costUsd ?? null,
+          error: fullRun.error,
+        });
+      }
+    }
+
+    res.json(taskRuns);
+  } catch (err) {
+    console.error("Failed to list task runs:", err);
+    res.status(500).json({ error: "Failed to list task runs" });
+  }
+});
+
+// GET /api/projects/:id/tasks/:taskId/prompt - Get execution prompt preview
+router.get("/:taskId/prompt", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+    const taskId = getParam(req.params, "taskId");
+
+    // Load task
+    const task = await taskService.get(projectId, taskId);
+    if (!task) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    // Load project
+    const project = await projectService.get(projectId);
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    // Load team if assigned
+    let team = null;
+    if (task.teamId) {
+      team = await teamService.get(task.teamId);
+    }
+
+    // Generate prompt preview
+    const prompt = previewExecutionPrompt(project, task, team);
+
+    res.json({ prompt });
+  } catch (err) {
+    console.error("Failed to get prompt preview:", err);
+    res.status(500).json({ error: "Failed to get prompt preview" });
   }
 });
 

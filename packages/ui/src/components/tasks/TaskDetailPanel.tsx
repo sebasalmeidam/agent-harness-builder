@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play } from "lucide-react";
+import { Play, ChevronDown, ChevronRight, Clock, DollarSign, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
 import TaskActivityLog from "./TaskActivityLog";
@@ -14,10 +15,48 @@ interface Task {
   status: "pending" | "running" | "done" | "failed";
 }
 
+interface RunSummary {
+  id: string;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt: string | null;
+  costUsd: number | null;
+  error: string | null;
+}
+
 interface TaskDetailPanelProps {
   taskId: string;
   projectId: string;
   onUpdate?: () => void;
+}
+
+/**
+ * Formats a date string to a readable format.
+ */
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * Returns badge styling for run status.
+ */
+function getRunStatusBadge(status: string): { label: string; className: string } {
+  switch (status) {
+    case "running":
+      return { label: "Running", className: "bg-info-light text-info" };
+    case "completed":
+      return { label: "Completed", className: "bg-success-light text-success" };
+    case "failed":
+      return { label: "Failed", className: "bg-error-light text-error" };
+    default:
+      return { label: status, className: "bg-[rgb(189,190,191)] text-text-secondary" };
+  }
 }
 
 export default function TaskDetailPanel({
@@ -31,6 +70,15 @@ export default function TaskDetailPanel({
   const [saving, setSaving] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
+
+  // Execution prompt state
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [promptText, setPromptText] = useState<string | null>(null);
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+
+  // Execution history state
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -76,6 +124,54 @@ export default function TaskDetailPanel({
     fetchTask();
   }, [taskId, projectId]);
 
+  // Fetch execution history
+  useEffect(() => {
+    async function fetchRuns() {
+      setLoadingRuns(true);
+      try {
+        const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/runs`);
+        if (res.ok) {
+          const data = await res.json();
+          setRuns(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch runs:", err);
+      } finally {
+        setLoadingRuns(false);
+      }
+    }
+
+    fetchRuns();
+  }, [taskId, projectId]);
+
+  // Fetch execution prompt when toggled
+  const fetchPrompt = useCallback(async () => {
+    if (promptText !== null) return; // Already fetched
+
+    setLoadingPrompt(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/prompt`);
+      if (res.ok) {
+        const data = await res.json();
+        setPromptText(data.prompt);
+      } else {
+        setPromptText("Failed to load prompt");
+      }
+    } catch (err) {
+      setPromptText("Failed to load prompt");
+    } finally {
+      setLoadingPrompt(false);
+    }
+  }, [projectId, taskId, promptText]);
+
+  // Toggle prompt visibility
+  const handleTogglePrompt = useCallback(() => {
+    if (!showPrompt && promptText === null) {
+      fetchPrompt();
+    }
+    setShowPrompt(!showPrompt);
+  }, [showPrompt, promptText, fetchPrompt]);
+
   // Save changes to server
   const saveChanges = useCallback(
     async (updates: Partial<Task>) => {
@@ -97,6 +193,9 @@ export default function TaskDetailPanel({
         setTask(updated);
         titleBeforeEdit.current = updated.title;
         descriptionBeforeEdit.current = updated.description;
+
+        // Reset prompt cache since task changed
+        setPromptText(null);
 
         // Notify parent for refresh (task list may need to update)
         onUpdate?.();
@@ -156,6 +255,8 @@ export default function TaskDetailPanel({
   const handleTeamChange = useCallback(
     (newTeamId: string | null) => {
       setEditTeamId(newTeamId);
+      // Reset prompt cache since team changed
+      setPromptText(null);
       saveChanges({ teamId: newTeamId });
     },
     [saveChanges],
@@ -175,6 +276,11 @@ export default function TaskDetailPanel({
         titleBeforeEdit.current = data.title;
         descriptionBeforeEdit.current = data.description;
         onUpdate?.();
+      }
+      // Also refresh runs
+      const runsRes = await fetch(`/api/projects/${projectId}/tasks/${taskId}/runs`);
+      if (runsRes.ok) {
+        setRuns(await runsRes.json());
       }
     } catch (err) {
       console.error("Failed to refresh task:", err);
@@ -217,7 +323,7 @@ export default function TaskDetailPanel({
 
   // Handle execution completion
   const handleExecutionComplete = useCallback(
-    (status: "completed" | "failed") => {
+    (_status: "completed" | "failed") => {
       // Refresh task data to get updated checklist and status
       refreshTask();
     },
@@ -245,104 +351,182 @@ export default function TaskDetailPanel({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-bg-primary p-6">
-      {/* Title */}
-      <div className="mb-4">
-        <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
-          Title
-        </label>
-        <input
-          type="text"
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          data-testid="task-title-input"
-        />
-      </div>
-
-      {/* Description */}
-      <div className="mb-4">
-        <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
-          Description
-        </label>
-        <textarea
-          value={editDescription}
-          onChange={(e) => setEditDescription(e.target.value)}
-          onBlur={handleDescriptionBlur}
-          placeholder="Add a description..."
-          rows={3}
-          className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          data-testid="task-description-input"
-        />
-      </div>
-
-      {/* Checklist */}
-      <div className="mb-4">
-        <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
-          Checklist
-        </label>
-        <ChecklistEditor
-          items={editChecklist}
-          onChange={handleChecklistChange}
-        />
-      </div>
-
-      {/* Team Selector */}
-      <div className="mb-6">
-        <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
-          Assigned Team
-        </label>
-        <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
-      </div>
-
-      {/* Execute Button */}
-      <div>
-        <button
-          disabled={
-            !editTeamId ||
-            task.status === "running" ||
-            task.status === "done" ||
-            executing
-          }
-          onClick={handleExecute}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-body text-sm font-medium text-white transition-colors disabled:opacity-50 hover:bg-primary/90 disabled:hover:bg-primary"
-          title={
-            !editTeamId
-              ? "Assign a team to execute this task"
-              : task.status === "done"
-                ? "Task is already completed"
-                : task.status === "running"
-                  ? "Task is currently running"
-                  : "Execute this task"
-          }
-          data-testid="execute-button"
-        >
-          <Play className="h-4 w-4" />
-          {task.status === "running"
-            ? "Running..."
-            : task.status === "done"
-              ? "Completed"
-              : executing
-                ? "Starting..."
-                : "Execute Task"}
-        </button>
-      </div>
-
-      {/* Saving indicator */}
-      {saving && (
-        <div className="mt-4 font-body text-xs text-text-secondary">
-          Saving...
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border bg-bg-primary p-6">
+        {/* Title */}
+        <div className="mb-4">
+          <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
+            Title
+          </label>
+          <input
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="task-title-input"
+          />
         </div>
-      )}
 
-      {/* Activity Log (shown during and after execution) */}
-      {runId && (
-        <TaskActivityLog
-          projectId={projectId}
-          runId={runId}
-          onComplete={handleExecutionComplete}
-        />
+        {/* Description */}
+        <div className="mb-4">
+          <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
+            Description
+          </label>
+          <textarea
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            onBlur={handleDescriptionBlur}
+            placeholder="Add a description..."
+            rows={3}
+            className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="task-description-input"
+          />
+        </div>
+
+        {/* Checklist */}
+        <div className="mb-4">
+          <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
+            Checklist
+          </label>
+          <ChecklistEditor
+            items={editChecklist}
+            onChange={handleChecklistChange}
+          />
+        </div>
+
+        {/* Team Selector */}
+        <div className="mb-6">
+          <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
+            Assigned Team
+          </label>
+          <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
+        </div>
+
+        {/* View Execution Prompt Toggle */}
+        {editTeamId && (
+          <div className="mb-4">
+            <button
+              onClick={handleTogglePrompt}
+              className="flex items-center gap-2 font-body text-sm text-primary hover:text-primary/80"
+              data-testid="view-prompt-toggle"
+            >
+              {showPrompt ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              View execution prompt
+            </button>
+
+            {showPrompt && (
+              <div className="mt-2 rounded-md border border-border bg-bg-secondary p-4">
+                {loadingPrompt ? (
+                  <p className="font-body text-sm text-text-secondary">Loading prompt...</p>
+                ) : (
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-text-primary">
+                    {promptText}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Execute Button */}
+        <div>
+          <button
+            disabled={
+              !editTeamId ||
+              task.status === "running" ||
+              task.status === "done" ||
+              executing
+            }
+            onClick={handleExecute}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-body text-sm font-medium text-white transition-colors disabled:opacity-50 hover:bg-primary/90 disabled:hover:bg-primary"
+            title={
+              !editTeamId
+                ? "Assign a team to execute this task"
+                : task.status === "done"
+                  ? "Task is already completed"
+                  : task.status === "running"
+                    ? "Task is currently running"
+                    : "Execute this task"
+            }
+            data-testid="execute-button"
+          >
+            <Play className="h-4 w-4" />
+            {task.status === "running"
+              ? "Running..."
+              : task.status === "done"
+                ? "Completed"
+                : executing
+                  ? "Starting..."
+                  : "Execute Task"}
+          </button>
+        </div>
+
+        {/* Saving indicator */}
+        {saving && (
+          <div className="mt-4 font-body text-xs text-text-secondary">
+            Saving...
+          </div>
+        )}
+
+        {/* Activity Log (shown during and after execution) */}
+        {runId && (
+          <TaskActivityLog
+            projectId={projectId}
+            runId={runId}
+            onComplete={handleExecutionComplete}
+          />
+        )}
+      </div>
+
+      {/* Execution History */}
+      {runs.length > 0 && (
+        <div className="rounded-lg border border-border bg-bg-primary p-6">
+          <h3 className="mb-4 font-heading text-lg font-semibold text-black">
+            Execution History
+          </h3>
+
+          {loadingRuns ? (
+            <p className="font-body text-sm text-text-secondary">Loading history...</p>
+          ) : (
+            <div className="space-y-2">
+              {runs.map((run) => {
+                const statusBadge = getRunStatusBadge(run.status);
+                return (
+                  <Link
+                    key={run.id}
+                    to={`/projects/${projectId}/runs/${run.id}`}
+                    className="flex items-center justify-between rounded-md border border-border bg-bg-secondary p-3 transition-colors hover:border-primary"
+                    data-testid={`run-history-${run.id}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 font-body text-xs font-medium ${statusBadge.className}`}
+                      >
+                        {statusBadge.label}
+                      </span>
+                      <span className="flex items-center gap-1 font-body text-sm text-text-secondary">
+                        <Clock className="h-3.5 w-3.5" />
+                        {formatDate(run.startedAt)}
+                      </span>
+                      {run.costUsd != null && (
+                        <span className="flex items-center gap-1 font-body text-sm text-text-secondary">
+                          <DollarSign className="h-3.5 w-3.5" />
+                          ${run.costUsd.toFixed(4)}
+                        </span>
+                      )}
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-text-secondary" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

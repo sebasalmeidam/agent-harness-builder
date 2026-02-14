@@ -15,9 +15,11 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import * as projectService from "./project-service.js";
 import * as runService from "./run-service.js";
 import * as taskService from "./task-service.js";
+import * as teamService from "./team-service.js";
 import { exportHarness } from "./harness-service.js";
 import * as progressService from "./progress-service.js";
 import * as configService from "./config-service.js";
+import { composeExecutionPrompt } from "./prompt-composer.js";
 
 // --- Types ---
 
@@ -216,7 +218,7 @@ export async function startTaskRun(
   // Update task status to "running"
   await taskService.update(projectId, taskId, { status: "running" });
 
-  // Load project (for path)
+  // Load project (for path and description)
   const project = await projectService.get(projectId);
   if (!project) {
     // Restore task status to previous status if project not found
@@ -226,14 +228,17 @@ export async function startTaskRun(
     throw error;
   }
 
-  // Load team data and export harness
+  // Load team data (for processWorkflow if available)
+  const team = await teamService.get(task.teamId);
+
+  // Load harness for SDK translation
   const harness = await exportHarness(task.teamId);
 
-  // Compose task prompt from task title, description, and checklist
-  const taskPrompt = composeTaskPrompt(task);
+  // Compose rich execution prompt with project context, team process, and task
+  const executionPrompt = composeExecutionPrompt(project, task, team);
 
-  // Translate harness with task prompt
-  const translatedTeam = translateHarness(harness, taskPrompt);
+  // Translate harness with execution prompt
+  const translatedTeam = translateHarness(harness, executionPrompt);
 
   // Generate run ID
   const runId = randomUUID();
