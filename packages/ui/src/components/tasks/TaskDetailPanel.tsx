@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Play, ChevronDown, ChevronRight, Clock, DollarSign, ExternalLink } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
 import TaskActivityLog from "./TaskActivityLog";
@@ -67,7 +67,6 @@ export default function TaskDetailPanel({
   projectId,
   onUpdate,
 }: TaskDetailPanelProps) {
-  const navigate = useNavigate();
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -387,9 +386,6 @@ export default function TaskDetailPanel({
       // Update task status to running immediately
       setTask({ ...task, status: "running" });
       onUpdate?.();
-
-      // Navigate to the live execution page
-      navigate(`/projects/${projectId}/runs/${data.runId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to execute task");
     } finally {
@@ -557,6 +553,17 @@ export default function TaskDetailPanel({
             </h4>
             <TeamProgress agents={teamAgents} agentStatuses={agentStatuses} />
           </div>
+        )}
+
+        {/* View Execution link */}
+        {runId && (
+          <Link
+            to={`/projects/${projectId}/runs/${runId}`}
+            className="mt-3 inline-flex items-center gap-2 rounded-md border border-primary bg-primary-light px-4 py-2 font-body text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-white"
+          >
+            <ExternalLink className="h-4 w-4" />
+            {task?.status === "running" ? "View Live Execution" : "View Execution Details"}
+          </Link>
         )}
 
         {/* Activity Log (shown during and after execution) */}
