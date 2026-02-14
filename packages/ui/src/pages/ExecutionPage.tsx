@@ -166,12 +166,17 @@ export default function ExecutionPage() {
 
         if (isTerminalStatus(data.status)) {
           // History mode: use REST data directly
+          // Inject costUsd into summary from run-level field
+          const summary = data.summary ?? null;
+          if (summary && data.costUsd != null) {
+            summary.costUsd = data.costUsd;
+          }
           setHistoryData({
             status: data.status,
             agentStatuses: data.agentStatuses ?? {},
             activityLog: data.activityLog ?? [],
             files: data.files ?? [],
-            summary: data.summary ?? null,
+            summary,
             error: data.error ?? null,
             connectionStatus: "disconnected",
           });
