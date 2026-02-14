@@ -313,6 +313,10 @@ describe("event subscriptions", () => {
 
 describe("simulated execution completion", () => {
   it("completes the run with a summary after simulation", async () => {
+    // Remove API key to force simulation path
+    const originalKey = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+
     await setupProjectWithTeam();
 
     const { runId } = await executionService.startRun("test-project");
@@ -341,9 +345,18 @@ describe("simulated execution completion", () => {
 
     // Activity log should have entries
     expect(run!.activityLog.length).toBeGreaterThan(0);
+
+    // Restore API key for other tests
+    if (originalKey) {
+      process.env["ANTHROPIC_API_KEY"] = originalKey;
+    }
   });
 
   it("records file changes during simulation", async () => {
+    // Remove API key to force simulation path
+    const originalKey = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+
     await setupProjectWithTeam();
 
     const { runId } = await executionService.startRun("test-project");
@@ -356,6 +369,11 @@ describe("simulated execution completion", () => {
 
     // The simulation creates file entries for each teammate's work
     expect(run!.files.length).toBeGreaterThan(0);
+
+    // Restore API key for other tests
+    if (originalKey) {
+      process.env["ANTHROPIC_API_KEY"] = originalKey;
+    }
   });
 
   it("activity log entries have required fields", async () => {
@@ -380,6 +398,10 @@ describe("simulated execution completion", () => {
   });
 
   it("includes handoff entries in the activity log", async () => {
+    // Remove API key to force simulation path
+    const originalKey = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+
     await setupProjectWithTeam();
 
     const { runId } = await executionService.startRun("test-project");
@@ -392,6 +414,11 @@ describe("simulated execution completion", () => {
 
     const handoffs = run!.activityLog.filter((e) => e.type === "handoff");
     expect(handoffs.length).toBeGreaterThan(0);
+
+    // Restore API key for other tests
+    if (originalKey) {
+      process.env["ANTHROPIC_API_KEY"] = originalKey;
+    }
   });
 });
 
@@ -803,5 +830,212 @@ describe("Phase 3: Task-Level Execution", () => {
     // These should be passed to resolveTools which returns the default tool set
     const expectedTools = resolveTools(["architecture", "code review"]);
     expect(capturedTools).toEqual(expectedTools);
+  });
+});
+
+describe("Phase 4: Error Handling and API Key Validation", () => {
+  it("falls back to simulation when ANTHROPIC_API_KEY is not set", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Clear mock call history before this test
+    executeWithSdkMock.mockClear();
+
+    // Remove API key to trigger simulation path
+    const originalKey = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // SDK should not have been called (simulation path used instead)
+    expect(executeWithSdkMock).not.toHaveBeenCalled();
+
+    // Run should complete successfully with simulation
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("completed");
+
+    // Restore API key for other tests
+    if (originalKey) {
+      process.env["ANTHROPIC_API_KEY"] = originalKey;
+    }
+  });
+
+  it("creates error ActivityEntry when SDK throws rate limit error", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to throw rate limit error
+    async function* mockGenerator() {
+      throw new Error("Rate limit exceeded for requests. Please try again in 429 seconds.");
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("failed");
+
+    // Should have an error activity entry with rate limit message
+    const errorEntries = run!.activityLog.filter((e) => e.type === "error");
+    expect(errorEntries.length).toBeGreaterThan(0);
+    expect(errorEntries[0]!.message).toContain("Rate limit exceeded");
+  });
+
+  it("creates error ActivityEntry when SDK throws network error", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to throw network error
+    async function* mockGenerator() {
+      throw new Error("Network error: ECONNREFUSED");
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("failed");
+
+    // Should have an error activity entry with network error message
+    const errorEntries = run!.activityLog.filter((e) => e.type === "error");
+    expect(errorEntries.length).toBeGreaterThan(0);
+    expect(errorEntries[0]!.message).toContain("Network error");
+  });
+
+  it("creates error ActivityEntry when SDK throws invalid API key error", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to throw API key error
+    async function* mockGenerator() {
+      throw new Error("Authentication failed: invalid API key");
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("failed");
+
+    // Should have an error activity entry with API key error message
+    const errorEntries = run!.activityLog.filter((e) => e.type === "error");
+    expect(errorEntries.length).toBeGreaterThan(0);
+    expect(errorEntries[0]!.message).toContain("Invalid or missing Anthropic API key");
+  });
+
+  it("marks run as failed and sets agent status to blocked on SDK error", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to throw generic error
+    async function* mockGenerator() {
+      throw new Error("SDK internal error occurred");
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project");
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const run = await runService.get("test-project", runId);
+    expect(run).not.toBeNull();
+    expect(run!.status).toBe("failed");
+    expect(run!.error).toBeDefined();
+
+    // Lead agent should be in blocked state
+    const leadStatus = run!.agentStatuses["Lead Agent"];
+    expect(leadStatus).toBe("blocked");
+  });
+
+  it("supports concurrent execution with independent run state", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Clear mock call history and set up fresh implementation
+    executeWithSdkMock.mockClear();
+
+    // Track how many times SDK is called in THIS test
+    let callCount = 0;
+
+    // Mock SDK to return success for each call
+    executeWithSdkMock.mockImplementation(() => {
+      callCount++;
+      async function* mockGenerator() {
+        yield {
+          type: "result",
+          subtype: "success",
+          result: `Task ${callCount} completed`,
+          duration_ms: 1000,
+          duration_api_ms: 800,
+          is_error: false,
+          num_turns: 1,
+          stop_reason: "end_turn",
+          total_cost_usd: 0.01,
+          usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          modelUsage: {},
+          permission_denials: [],
+          uuid: `uuid-${callCount}`,
+          session_id: `session-${callCount}`,
+        };
+      }
+      return mockGenerator() as never;
+    });
+
+    await setupProjectWithTeam();
+
+    // Start two concurrent runs
+    const run1Promise = executionService.startRun("test-project");
+    const run2Promise = executionService.startRun("test-project");
+
+    const [result1, result2] = await Promise.all([run1Promise, run2Promise]);
+
+    // Should have different run IDs
+    expect(result1.runId).not.toBe(result2.runId);
+
+    // Wait for both executions to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Both runs should be persisted
+    const run1 = await runService.get("test-project", result1.runId);
+    const run2 = await runService.get("test-project", result2.runId);
+
+    expect(run1).not.toBeNull();
+    expect(run2).not.toBeNull();
+
+    // Both should complete successfully
+    expect(run1!.status).toBe("completed");
+    expect(run2!.status).toBe("completed");
+
+    // SDK should have been called exactly twice (once per run in this test)
+    expect(callCount).toBe(2);
+    expect(executeWithSdkMock).toHaveBeenCalledTimes(2);
+
+    // Each run should have independent state
+    expect(run1!.id).toBe(result1.runId);
+    expect(run2!.id).toBe(result2.runId);
+    expect(run1!.activityLog.length).toBeGreaterThan(0);
+    expect(run2!.activityLog.length).toBeGreaterThan(0);
   });
 });

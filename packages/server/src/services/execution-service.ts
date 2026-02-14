@@ -561,106 +561,171 @@ async function tryRealSdkExecution(
     let iterationCount = 0;
     let errorCount = 0;
 
-    for await (const message of sdkGenerator) {
-      iterationCount++;
+    try {
+      for await (const message of sdkGenerator) {
+        iterationCount++;
 
-      // Process different message types
-      if (message.type === "assistant") {
-        await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
-      } else if (message.type === "user") {
-        await handleUserMessage(run, message, leadId, leadName, leadEmoji);
-      } else if (message.type === "result") {
-        // Result message indicates execution completion
-        const totalTime = Math.round((Date.now() - startTime) / 1000);
+        // Process different message types
+        if (message.type === "assistant") {
+          await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
+        } else if (message.type === "user") {
+          await handleUserMessage(run, message, leadId, leadName, leadEmoji);
+        } else if (message.type === "result") {
+          // Result message indicates execution completion
+          const totalTime = Math.round((Date.now() - startTime) / 1000);
 
-        if (message.subtype === "success") {
-          // Success case
-          const summary: ExecutionSummary = {
-            filesChanged: run.files.length,
-            totalTime,
-            iterations: iterationCount,
-            errors: errorCount,
-          };
+          if (message.subtype === "success") {
+            // Success case
+            const summary: ExecutionSummary = {
+              filesChanged: run.files.length,
+              totalTime,
+              iterations: iterationCount,
+              errors: errorCount,
+            };
 
-          // Store cost if available
-          if (message.total_cost_usd) {
-            run.costUsd = message.total_cost_usd;
+            // Store cost if available
+            if (message.total_cost_usd) {
+              run.costUsd = message.total_cost_usd;
+            }
+
+            // Add completion activity entry
+            addActivityEntry(run, {
+              timestamp: new Date().toISOString(),
+              agentId: leadId,
+              agentEmoji: leadEmoji,
+              agentName: leadName,
+              message: message.result || "Work completed successfully",
+              type: "complete",
+            });
+
+            updateAgentStatus(run, leadName, "done", leadEmoji);
+            await completeRun(run, "completed", summary, null);
+          } else {
+            // Error case (subtype !== "success")
+            errorCount++;
+
+            const summary: ExecutionSummary = {
+              filesChanged: run.files.length,
+              totalTime,
+              iterations: iterationCount,
+              errors: errorCount,
+            };
+
+            // Store cost if available
+            if (message.total_cost_usd) {
+              run.costUsd = message.total_cost_usd;
+            }
+
+            // Join all error messages from the errors array
+            const errorMessage = message.errors && message.errors.length > 0
+              ? message.errors.join("; ")
+              : `Execution failed with error: ${message.subtype}`;
+
+            // Add error activity entry
+            addActivityEntry(run, {
+              timestamp: new Date().toISOString(),
+              agentId: leadId,
+              agentEmoji: leadEmoji,
+              agentName: leadName,
+              message: errorMessage,
+              type: "error",
+            });
+
+            updateAgentStatus(run, leadName, "blocked", leadEmoji);
+            await completeRun(run, "failed", summary, errorMessage);
           }
 
-          // Add completion activity entry
-          addActivityEntry(run, {
-            timestamp: new Date().toISOString(),
-            agentId: leadId,
-            agentEmoji: leadEmoji,
-            agentName: leadName,
-            message: message.result || "Work completed successfully",
-            type: "complete",
-          });
-
-          updateAgentStatus(run, leadName, "done", leadEmoji);
-          await completeRun(run, "completed", summary, null);
-        } else {
-          // Error case (subtype !== "success")
-          errorCount++;
-
-          const summary: ExecutionSummary = {
-            filesChanged: run.files.length,
-            totalTime,
-            iterations: iterationCount,
-            errors: errorCount,
-          };
-
-          // Store cost if available
-          if (message.total_cost_usd) {
-            run.costUsd = message.total_cost_usd;
-          }
-
-          // Join all error messages from the errors array
-          const errorMessage = message.errors && message.errors.length > 0
-            ? message.errors.join("; ")
-            : `Execution failed with error: ${message.subtype}`;
-
-          // Add error activity entry
-          addActivityEntry(run, {
-            timestamp: new Date().toISOString(),
-            agentId: leadId,
-            agentEmoji: leadEmoji,
-            agentName: leadName,
-            message: errorMessage,
-            type: "error",
-          });
-
-          updateAgentStatus(run, leadName, "blocked", leadEmoji);
-          await completeRun(run, "failed", summary, errorMessage);
+          // Result message is always the last message, execution is done
+          return { executed: true };
         }
 
-        // Result message is always the last message, execution is done
-        return { executed: true };
+        // Persist intermediate state periodically
+        if (iterationCount % 10 === 0) {
+          await runService.save(run);
+        }
       }
 
-      // Persist intermediate state periodically
-      if (iterationCount % 10 === 0) {
-        await runService.save(run);
-      }
+      // If we reach here without a result message, something went wrong
+      errorCount++;
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      const summary: ExecutionSummary = {
+        filesChanged: run.files.length,
+        totalTime,
+        iterations: iterationCount,
+        errors: errorCount,
+      };
+
+      await completeRun(run, "failed", summary, "SDK execution ended without result message");
+      return { executed: true };
+    } catch (err: unknown) {
+      // Classify and handle SDK errors
+      errorCount++;
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      const errorMessage = classifyAndFormatSdkError(err);
+
+      // Add error activity entry with clear user-facing message
+      addActivityEntry(run, {
+        timestamp: new Date().toISOString(),
+        agentId: leadId,
+        agentEmoji: leadEmoji,
+        agentName: leadName,
+        message: errorMessage,
+        type: "error",
+      });
+
+      // Update agent status to blocked
+      updateAgentStatus(run, leadName, "blocked", leadEmoji);
+
+      // Complete run as failed
+      const summary: ExecutionSummary = {
+        filesChanged: run.files.length,
+        totalTime,
+        iterations: iterationCount,
+        errors: errorCount,
+      };
+
+      await completeRun(run, "failed", summary, errorMessage);
+      return { executed: true };
     }
-
-    // If we reach here without a result message, something went wrong
-    errorCount++;
-    const totalTime = Math.round((Date.now() - startTime) / 1000);
-    const summary: ExecutionSummary = {
-      filesChanged: run.files.length,
-      totalTime,
-      iterations: iterationCount,
-      errors: errorCount,
-    };
-
-    await completeRun(run, "failed", summary, "SDK execution ended without result message");
-    return { executed: true };
   } catch (err: unknown) {
-    // SDK error occurred - log it and fall back to simulation
-    console.error("SDK execution error:", err);
+    // Outer catch for non-SDK errors (e.g., project not found)
+    console.error("Unexpected error in SDK execution:", err);
     return { executed: false };
   }
+}
+
+/**
+ * Classifies an SDK error and returns a clear user-facing error message.
+ */
+function classifyAndFormatSdkError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return "An unknown error occurred during execution.";
+  }
+
+  const errorMessage = err.message.toLowerCase();
+
+  // Check for rate limit errors (HTTP 429)
+  if (errorMessage.includes("rate limit") || errorMessage.includes("429") || errorMessage.includes("too many requests")) {
+    return "Rate limit exceeded. Please wait a moment and try again.";
+  }
+
+  // Check for invalid API key errors
+  if (errorMessage.includes("api key") || errorMessage.includes("authentication") || errorMessage.includes("unauthorized") || errorMessage.includes("401")) {
+    return "Invalid or missing Anthropic API key. Please check your ANTHROPIC_API_KEY environment variable.";
+  }
+
+  // Check for network errors
+  if (errorMessage.includes("network") || errorMessage.includes("econnrefused") || errorMessage.includes("timeout") || errorMessage.includes("enotfound")) {
+    return "Network error: Unable to connect to the Anthropic API. Please check your internet connection.";
+  }
+
+  // Check for SDK internal errors
+  if (errorMessage.includes("sdk") || errorMessage.includes("internal error")) {
+    return `SDK error: ${err.message}`;
+  }
+
+  // Generic fallback for unknown errors
+  return `Execution error: ${err.message}`;
 }
 
 /**
