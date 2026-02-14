@@ -13,11 +13,7 @@ interface SuggestionDraftListProps {
   onComplete: () => void;
 }
 
-interface EditableChecklistItem {
-  id: string;
-  description: string;
-  editing: boolean;
-}
+// EditableChecklistItem interface removed - was unused
 
 export default function SuggestionDraftList({
   projectId,
@@ -207,7 +203,7 @@ export default function SuggestionDraftList({
       </div>
 
       <div className="space-y-4">
-        {suggestions.map((suggestion, index) => {
+        {suggestions.map((_suggestion, index) => {
           const editState = getEditState(index);
           const error = errors[index];
           const isProcessing = processing[index];
