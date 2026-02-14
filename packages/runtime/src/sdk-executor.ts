@@ -6,6 +6,16 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 /**
+ * Agent definition for SDK's agents option.
+ * Used to define sub-agents that can be spawned via the Task tool.
+ */
+export interface AgentDefinition {
+  description: string;
+  prompt: string;
+  tools?: string[];
+}
+
+/**
  * Parameters for SDK execution.
  */
 export interface ExecuteWithSdkParams {
@@ -15,6 +25,7 @@ export interface ExecuteWithSdkParams {
   prompt: string;
   tools: string[];
   maxBudgetUsd?: number;
+  agents?: Record<string, AgentDefinition>;
 }
 
 /**
@@ -24,33 +35,44 @@ export interface ExecuteWithSdkParams {
  * - "read-only" skill → Read, Glob, Grep only
  * - "testing" skill → Read, Write, Edit, Bash, Glob, Grep
  * - Default → Full tool set
+ * - Lead agents (isLead=true) also get the "Task" tool for delegation
  *
  * @param skills - Array of agent skill strings
+ * @param isLead - Whether this is the lead agent (adds Task tool)
  * @returns Array of tool names for SDK tools and allowedTools options
  */
-export function resolveTools(skills: string[]): string[] {
+export function resolveTools(skills: string[], isLead?: boolean): string[] {
+  let tools: string[];
+
   // Check for read-only restriction
   if (skills.some((s) => s.toLowerCase().includes("read-only"))) {
-    return ["Read", "Glob", "Grep"];
+    tools = ["Read", "Glob", "Grep"];
   }
-
   // Check for testing skill
-  if (skills.some((s) => s.toLowerCase().includes("testing"))) {
-    return ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
+  else if (skills.some((s) => s.toLowerCase().includes("testing"))) {
+    tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
+  }
+  // Default: full tool set
+  else {
+    tools = [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+    ];
   }
 
-  // Default: full tool set
-  return [
-    "Read",
-    "Write",
-    "Edit",
-    "Bash",
-    "Glob",
-    "Grep",
-    "WebFetch",
-    "WebSearch",
-    "NotebookEdit",
-  ];
+  // Add Task tool for lead agents
+  if (isLead) {
+    tools.push("Task");
+  }
+
+  return tools;
 }
 
 /**
@@ -59,7 +81,7 @@ export function resolveTools(skills: string[]): string[] {
  * Calls the SDK's query() function with proper parameters and returns
  * the async generator that yields SDK messages.
  *
- * @param params - Execution parameters (systemPrompt, model, cwd, prompt, tools, maxBudgetUsd)
+ * @param params - Execution parameters (systemPrompt, model, cwd, prompt, tools, maxBudgetUsd, agents)
  * @returns AsyncGenerator yielding SDKMessage objects
  */
 export function executeWithSdk(
@@ -72,6 +94,7 @@ export function executeWithSdk(
     prompt,
     tools,
     maxBudgetUsd = 5.0,
+    agents,
   } = params;
 
   return query({
@@ -85,6 +108,7 @@ export function executeWithSdk(
       allowedTools: tools,
       allowDangerouslySkipPermissions: true,
       maxBudgetUsd,
+      ...(agents && { agents }),
     },
   });
 }

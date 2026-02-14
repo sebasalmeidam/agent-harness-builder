@@ -479,11 +479,15 @@ describe("translateHarness", () => {
     const result = translateHarness(harness, "Build project");
 
     const leadPrompt = result.leadAgent.systemPrompt;
-    expect(leadPrompt).toContain("Team Members");
-    expect(leadPrompt).toContain("Developer (Backend Dev): Build APIs");
-    expect(leadPrompt).toContain("QA Engineer (Tester): Ensure quality");
-    // Lead should not list itself as a team member
-    expect(leadPrompt).not.toContain("Lead (Tech Lead): Coordinate");
+    expect(leadPrompt).toContain("Teammates Available for Delegation");
+    expect(leadPrompt).toContain("### Developer");
+    expect(leadPrompt).toContain("**Role:** Backend Dev");
+    expect(leadPrompt).toContain("**Goal:** Build APIs");
+    expect(leadPrompt).toContain("### QA Engineer");
+    expect(leadPrompt).toContain("**Role:** Tester");
+    expect(leadPrompt).toContain("**Goal:** Ensure quality");
+    // Lead should not list itself as a teammate
+    expect(leadPrompt).not.toContain("### Lead");
   });
 
   it("handles agents with empty tags and practices", () => {
@@ -752,5 +756,81 @@ describe("translateHarness", () => {
     expect(devPrompt).toContain("## Skills");
     expect(devPrompt).toContain("### Code Style");
     expect(devPrompt).toContain("Use 2-space indentation. Max line length 100 chars.");
+  });
+
+  // --- Delegation Tests (ADR-015) ---
+
+  it("includes teammate skills in lead agent prompt", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "lead", name: "Lead", role: "Tech Lead", goal: "Coordinate", skills: ["Leadership"] }),
+        makeAgent({ id: "dev", name: "Developer", role: "Backend Dev", goal: "Build APIs", skills: ["TypeScript", "Node.js", "Testing"] }),
+        makeAgent({ id: "qa", name: "QA Engineer", role: "Tester", goal: "Ensure quality", skills: ["Manual Testing", "Automation"] }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build project");
+
+    const leadPrompt = result.leadAgent.systemPrompt;
+    expect(leadPrompt).toContain("Teammates Available for Delegation");
+    expect(leadPrompt).toContain("### Developer");
+    expect(leadPrompt).toContain("**Skills:** TypeScript, Node.js, Testing");
+    expect(leadPrompt).toContain("### QA Engineer");
+    expect(leadPrompt).toContain("**Skills:** Manual Testing, Automation");
+  });
+
+  it("includes delegation instructions in lead agent prompt", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "lead", name: "Lead" }),
+        makeAgent({ id: "dev", name: "Developer" }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const leadPrompt = result.leadAgent.systemPrompt;
+    expect(leadPrompt).toContain("Delegation Instructions");
+    expect(leadPrompt).toContain("You can delegate subtasks to your teammates using the Task tool");
+    expect(leadPrompt).toContain("Match the subtask to the teammate whose skills best fit");
+    expect(leadPrompt).toContain("Provide clear, specific instructions in the task description");
+    expect(leadPrompt).toContain("Each teammate will work independently with their own system prompt");
+  });
+
+  it("includes workflow relationships in teammate descriptions", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "lead", name: "Lead" }),
+        makeAgent({ id: "dev", name: "Developer" }),
+        makeAgent({ id: "qa", name: "QA" }),
+      ],
+      edges: [
+        makeEdge({ id: "e1", source: "lead", target: "dev", type: "passes-work-to" }),
+        makeEdge({ id: "e2", source: "dev", target: "lead", type: "escalates-to" }),
+      ],
+    });
+
+    const result = translateHarness(harness, "Build project");
+
+    const leadPrompt = result.leadAgent.systemPrompt;
+    expect(leadPrompt).toContain("### Developer");
+    expect(leadPrompt).toContain("**Workflow:** You passes work to Developer");
+  });
+
+  it("does not include delegation sections for solo agent", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "solo", name: "Solo Agent" }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Work alone");
+
+    const leadPrompt = result.leadAgent.systemPrompt;
+    expect(leadPrompt).not.toContain("Teammates Available for Delegation");
+    expect(leadPrompt).not.toContain("Delegation Instructions");
   });
 });

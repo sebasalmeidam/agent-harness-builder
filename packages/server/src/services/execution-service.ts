@@ -7,6 +7,7 @@ import type {
   ActivityEntry,
   ExecutionSummary,
   TranslatedTeam,
+  AgentDefinition,
 } from "@agent-harness/runtime";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
@@ -14,6 +15,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import * as projectService from "./project-service.js";
 import * as runService from "./run-service.js";
 import { exportHarness } from "./harness-service.js";
+import * as progressService from "./progress-service.js";
 
 // --- Types ---
 
@@ -269,6 +271,16 @@ async function completeRun(
   // Persist final run record
   await runService.save(run);
 
+  // Update progress file with final status
+  const finalMessage = status === "completed"
+    ? `Execution completed successfully. Files changed: ${summary.filesChanged}, Total time: ${summary.totalTime}s, Iterations: ${summary.iterations}, Errors: ${summary.errors}`
+    : `Execution failed: ${errorMessage || "Unknown error"}`;
+  await progressService.appendProgressUpdate(
+    run.projectId,
+    run.id,
+    finalMessage
+  );
+
   // Emit run status event
   emitRunEvent(run, {
     type: "run-status",
@@ -330,7 +342,7 @@ async function handleRunError(
 async function executeRun(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> },
+  harness: { agents: Array<{ id: string; name: string; emoji: string; role?: string; goal?: string; skills?: string[] }> },
   options?: StartRunOptions
 ): Promise<void> {
   const startTime = Date.now();
@@ -338,6 +350,16 @@ async function executeRun(
   let errorCount = 0;
 
   try {
+    // Initialize progress file at execution start
+    const taskDescription = options?.taskDescription || "Execute project specification";
+    const checklist = options?.checklist || [];
+    await progressService.initProgressFile(
+      run.projectId,
+      run.id,
+      taskDescription,
+      checklist
+    );
+
     // --- Attempt real SDK execution ---
     // Try to import and use the Claude Agent SDK.
     // If it fails (not installed, wrong API, etc.), fall back to simulation.
@@ -478,7 +500,7 @@ async function executeRun(
 async function tryRealSdkExecution(
   run: ExecutionRun,
   translatedTeam: TranslatedTeam,
-  harnessAgents: Array<{ id: string; name: string; emoji: string; skills?: string[] }>,
+  harnessAgents: Array<{ id: string; name: string; emoji: string; role?: string; goal?: string; skills?: string[] }>,
   options?: StartRunOptions
 ): Promise<{ executed: boolean }> {
   // Gate real SDK execution on API key presence.
@@ -517,9 +539,29 @@ async function tryRealSdkExecution(
     }
 
     // Resolve tools for the lead agent based on skills
+    // Pass isLead: true to include Task tool for delegation
     const leadAgentData = harnessAgents.find((a) => a.id === leadId);
-    const skills = leadAgentData ? leadAgentData.skills || [] : [];
-    const tools = resolveTools(skills);
+    const skills: string[] = leadAgentData?.skills ?? [];
+    const tools = resolveTools(skills, true);
+
+    // Build agents definition for SDK if teammates exist
+    let agents: Record<string, AgentDefinition> | undefined;
+    if (translatedTeam.teammates.length > 0) {
+      agents = {};
+      for (const teammate of translatedTeam.teammates) {
+        const teammateHarnessAgent = harnessAgents.find((a) => a.name === teammate.name);
+        const teammateSkills: string[] = teammateHarnessAgent?.skills ?? [];
+        const teammateTools = resolveTools(teammateSkills, false);
+
+        const role = teammateHarnessAgent?.role || teammate.name;
+        const goal = teammateHarnessAgent?.goal || "Team member";
+        agents[teammate.name] = {
+          description: `${role}: ${goal}`,
+          prompt: teammate.systemPrompt,
+          tools: teammateTools,
+        };
+      }
+    }
 
     // Build prompt from task description + checklist, or fall back to project spec
     let prompt: string;
@@ -535,13 +577,16 @@ async function tryRealSdkExecution(
           lines.push(`- [ ] ${item}`);
         });
         lines.push("");
-        lines.push("Complete all checklist items. Verify each item upon completion.");
+        lines.push("After completing your work, verify each checklist item:");
+        lines.push("1. For each item, confirm it is done by checking the relevant files or outputs.");
+        lines.push("2. Report the status of each checklist item (done/not done) with a brief explanation.");
+        lines.push("3. Update the progress file with your verification results.");
       }
 
       prompt = lines.join("\n");
     } else {
       // Backward compatible: use project spec
-      prompt = project.spec;
+      prompt = project.spec || "Execute the project tasks";
     }
 
     // Update agent status to working
@@ -555,6 +600,7 @@ async function tryRealSdkExecution(
       prompt,
       tools,
       maxBudgetUsd: 5.0,
+      agents,
     });
 
     // Process SDK messages
@@ -775,6 +821,13 @@ async function handleAssistantMessage(
           addFileChange(run, filePath);
         }
       }
+
+      // Append progress update for tool completion
+      await progressService.appendProgressUpdate(
+        run.projectId,
+        run.id,
+        `Tool completed: ${toolName}`
+      );
     }
   }
 }

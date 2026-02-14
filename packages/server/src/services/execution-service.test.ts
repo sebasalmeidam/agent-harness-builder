@@ -672,7 +672,7 @@ describe("Phase 3: Task-Level Execution", () => {
     expect(capturedPrompt).toContain("- [ ] Add login form");
     expect(capturedPrompt).toContain("- [ ] Add password validation");
     expect(capturedPrompt).toContain("- [ ] Add session management");
-    expect(capturedPrompt).toContain("Complete all checklist items");
+    expect(capturedPrompt).toContain("After completing your work, verify each checklist item");
   });
 
   it("uses project spec as prompt when no taskDescription provided (backward compatible)", async () => {
@@ -837,7 +837,7 @@ describe("Phase 3: Task-Level Execution", () => {
     expect(capturedTools).toBeDefined();
     // The lead agent has skills: ["architecture", "code review"]
     // These should be passed to resolveTools which returns the default tool set
-    const expectedTools = resolveTools(["architecture", "code review"]);
+    const expectedTools = resolveTools(["architecture", "code review"], true);
     expect(capturedTools).toEqual(expectedTools);
   });
 });
@@ -1046,5 +1046,208 @@ describe("Phase 4: Error Handling and API Key Validation", () => {
     expect(run2!.id).toBe(result2.runId);
     expect(run1!.activityLog.length).toBeGreaterThan(0);
     expect(run2!.activityLog.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Progress file integration", () => {
+  it("creates progress.md at execution start with task description and checklist", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return success
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        agent_outputs: [],
+        errors: [],
+        status: "success",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project", {
+      taskDescription: "Build a todo app",
+      checklist: ["Create UI", "Add backend", "Write tests"],
+    });
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Read progress file
+    const { readFile } = await import("node:fs/promises");
+    const progressPath = join(
+      tempDir,
+      "projects",
+      "test-project",
+      ".runs",
+      runId,
+      "progress.md"
+    );
+    const content = await readFile(progressPath, "utf-8");
+
+    expect(content).toContain("# Execution Progress");
+    expect(content).toContain(`**Run ID:** ${runId}`);
+    expect(content).toContain("**Status:** running");
+    expect(content).toContain("## Task");
+    expect(content).toContain("Build a todo app");
+    expect(content).toContain("## Checklist");
+    expect(content).toContain("- [ ] Create UI");
+    expect(content).toContain("- [ ] Add backend");
+    expect(content).toContain("- [ ] Write tests");
+  });
+
+  it("includes checklist validation instructions in prompt when checklist is provided", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return success
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        agent_outputs: [],
+        errors: [],
+        status: "success",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project", {
+      taskDescription: "Test task",
+      checklist: ["Item 1", "Item 2"],
+    });
+
+    // Wait for SDK call
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Verify the prompt passed to SDK includes validation instructions
+    expect(executeWithSdkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("verify each checklist item"),
+      })
+    );
+    expect(executeWithSdkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("confirm it is done by checking the relevant files"),
+      })
+    );
+  });
+
+  it("does not include checklist validation instructions when checklist is empty", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to return success
+    async function* mockGenerator() {
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        agent_outputs: [],
+        errors: [],
+        status: "success",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    await executionService.startRun("test-project", {
+      taskDescription: "Test task",
+      checklist: [],
+    });
+
+    // Wait for SDK call
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Verify the prompt does NOT include validation instructions
+    const calls = executeWithSdkMock.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const promptArg = calls[0]![0]!.prompt;
+    expect(promptArg).not.toContain("verify each checklist item");
+  });
+
+  it("appends progress updates to progress.md during execution", async () => {
+    const { executeWithSdk } = await import("@agent-harness/runtime");
+    const executeWithSdkMock = vi.mocked(executeWithSdk);
+
+    // Mock SDK to yield tool_use in assistant message
+    async function* mockGenerator() {
+      yield {
+        type: "assistant",
+        message: {
+          id: "msg_123",
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_1",
+              name: "Write",
+              input: { file_path: "/test/file.ts", content: "code" },
+            },
+          ],
+          model: "claude-3-opus-20240229",
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+      } as never;
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "Task completed",
+        duration_ms: 1000,
+        duration_api_ms: 800,
+        is_error: false,
+        num_turns: 1,
+        agent_outputs: [],
+        errors: [],
+        status: "success",
+      };
+    }
+    executeWithSdkMock.mockReturnValue(mockGenerator() as never);
+
+    await setupProjectWithTeam();
+    const { runId } = await executionService.startRun("test-project", {
+      taskDescription: "Test task",
+      checklist: [],
+    });
+
+    // Wait for execution to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Read progress file
+    const { readFile } = await import("node:fs/promises");
+    const progressPath = join(
+      tempDir,
+      "projects",
+      "test-project",
+      ".runs",
+      runId,
+      "progress.md"
+    );
+    const content = await readFile(progressPath, "utf-8");
+
+    // Should contain tool completion update
+    expect(content).toContain("Tool completed: Write");
+    // Should contain final status update
+    expect(content).toContain("Execution completed successfully");
   });
 });

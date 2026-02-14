@@ -78,6 +78,45 @@ describe("resolveTools", () => {
     const tools = resolveTools(["read-only", "testing"]);
     expect(tools).toEqual(["Read", "Glob", "Grep"]);
   });
+
+  it("includes Task tool when isLead is true", () => {
+    const tools = resolveTools([], true);
+    expect(tools).toContain("Task");
+    expect(tools).toEqual([
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Task",
+    ]);
+  });
+
+  it("does not include Task tool when isLead is false", () => {
+    const tools = resolveTools([], false);
+    expect(tools).not.toContain("Task");
+  });
+
+  it("does not include Task tool when isLead is not provided", () => {
+    const tools = resolveTools([]);
+    expect(tools).not.toContain("Task");
+  });
+
+  it("includes Task tool for lead with read-only skill", () => {
+    const tools = resolveTools(["read-only"], true);
+    expect(tools).toContain("Task");
+    expect(tools).toEqual(["Read", "Glob", "Grep", "Task"]);
+  });
+
+  it("includes Task tool for lead with testing skill", () => {
+    const tools = resolveTools(["testing"], true);
+    expect(tools).toContain("Task");
+    expect(tools).toEqual(["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task"]);
+  });
 });
 
 describe("executeWithSdk", () => {
@@ -174,5 +213,45 @@ describe("executeWithSdk", () => {
     const callArgs = mockedQuery.mock.calls[0][0];
     expect(callArgs.options!.tools).toEqual(tools);
     expect(callArgs.options!.allowedTools).toEqual(tools);
+  });
+
+  it("includes agents option when provided", () => {
+    const agents = {
+      Developer: {
+        description: "Backend Dev: Build APIs",
+        prompt: "You are a backend developer",
+        tools: ["Read", "Write", "Edit"],
+      },
+    };
+
+    executeWithSdk({
+      systemPrompt: "You are a lead agent",
+      model: "claude-sonnet-4-20250514",
+      cwd: "/tmp/test",
+      prompt: "Coordinate team",
+      tools: ["Read", "Write", "Task"],
+      agents,
+    });
+
+    expect(mockedQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          agents,
+        }),
+      })
+    );
+  });
+
+  it("does not include agents option when not provided", () => {
+    executeWithSdk({
+      systemPrompt: "You are a solo agent",
+      model: "claude-sonnet-4-20250514",
+      cwd: "/tmp/test",
+      prompt: "Work alone",
+      tools: ["Read", "Write"],
+    });
+
+    const callArgs = mockedQuery.mock.calls[0][0];
+    expect(callArgs.options).not.toHaveProperty("agents");
   });
 });
