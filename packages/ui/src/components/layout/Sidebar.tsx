@@ -139,7 +139,9 @@ export default function Sidebar({
                 {item.label}
               </span>
               {showWarning && expanded && (
-                <AlertCircle className="ml-auto h-4 w-4 shrink-0 text-warning" title="API key not configured" />
+                <span title="API key not configured">
+                  <AlertCircle className="ml-auto h-4 w-4 shrink-0 text-warning" />
+                </span>
               )}
             </NavLink>
           );
