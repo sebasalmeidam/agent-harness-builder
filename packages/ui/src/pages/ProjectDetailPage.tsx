@@ -3,6 +3,14 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Trash2, FolderOpen, AlertTriangle } from "lucide-react";
 import TaskList from "../components/tasks/TaskList";
 import TaskDetailPanel from "../components/tasks/TaskDetailPanel";
+import InitializeButton from "../components/tasks/InitializeButton";
+import SuggestionDraftList from "../components/tasks/SuggestionDraftList";
+
+interface TaskSuggestion {
+  title: string;
+  description: string;
+  checklist: { description: string }[];
+}
 
 interface Project {
   id: string;
@@ -26,9 +34,29 @@ export default function ProjectDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskListKey, setTaskListKey] = useState(0);
 
+  // Suggestion state
+  const [suggestions, setSuggestions] = useState<TaskSuggestion[] | null>(null);
+  const [taskCount, setTaskCount] = useState(0);
+
   // Refresh task list (called after task detail panel saves)
   const handleTaskUpdate = useCallback(() => {
     setTaskListKey((prev) => prev + 1);
+  }, []);
+
+  // Handle suggestions received from InitializeButton
+  const handleSuggestionsReceived = useCallback((newSuggestions: TaskSuggestion[]) => {
+    setSuggestions(newSuggestions);
+  }, []);
+
+  // Handle suggestions completed (all accepted or rejected)
+  const handleSuggestionsComplete = useCallback(() => {
+    setSuggestions(null);
+    setTaskListKey((prev) => prev + 1);
+  }, []);
+
+  // Handle task count change from TaskList
+  const handleTaskCountChange = useCallback((count: number) => {
+    setTaskCount(count);
   }, []);
 
   // Save message for inline editing feedback
@@ -287,12 +315,35 @@ export default function ProjectDetailPage() {
           <h2 className="mb-4 font-heading text-lg font-semibold text-black">
             Tasks
           </h2>
-          <TaskList
-            key={taskListKey}
-            projectId={project.id}
-            onTaskSelect={setSelectedTaskId}
-            selectedTaskId={selectedTaskId}
-          />
+
+          {/* Initialize button - shown when task count is 0 and no suggestions */}
+          {!suggestions && (
+            <InitializeButton
+              projectId={project.id}
+              taskCount={taskCount}
+              onSuggestionsReceived={handleSuggestionsReceived}
+            />
+          )}
+
+          {/* Suggestion draft list - shown when suggestions exist */}
+          {suggestions && (
+            <SuggestionDraftList
+              projectId={project.id}
+              suggestions={suggestions}
+              onComplete={handleSuggestionsComplete}
+            />
+          )}
+
+          {/* Task list - always shown */}
+          {!suggestions && (
+            <TaskList
+              key={taskListKey}
+              projectId={project.id}
+              onTaskSelect={setSelectedTaskId}
+              selectedTaskId={selectedTaskId}
+              onTaskCountChange={handleTaskCountChange}
+            />
+          )}
         </div>
 
         {/* Task Detail Panel */}
