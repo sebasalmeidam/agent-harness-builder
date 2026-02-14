@@ -6,6 +6,7 @@ import { tasksRouter } from "./routes/tasks.js";
 import { skillsRouter } from "./routes/skills.js";
 import { initializeRouter } from "./routes/initialize.js";
 import { settingsRouter } from "./routes/settings.js";
+import { generateRouter } from "./routes/generate.js";
 
 const app = express();
 
@@ -22,5 +23,6 @@ app.use("/api/projects/:id/tasks", tasksRouter);
 app.use("/api/projects/:id/initialize", initializeRouter);
 app.use("/api/skills", skillsRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/generate", generateRouter);
 
 export { app };
