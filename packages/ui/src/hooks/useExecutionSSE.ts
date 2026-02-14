@@ -25,6 +25,9 @@ export interface ExecutionSummary {
   totalTime: number;
   iterations: number;
   errors: number;
+  checklistCompleted?: number;
+  checklistTotal?: number;
+  costUsd?: number | null;
 }
 
 /**

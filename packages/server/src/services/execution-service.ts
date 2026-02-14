@@ -440,9 +440,11 @@ function addFileChange(run: ExecutionRun, filePath: string): void {
  * Analyzes activity log to identify completed checklist items.
  * Returns updated checklist with completed items marked.
  *
- * This is a best-effort analysis using keyword matching.
- * For each checklist item, we check if the activity log contains
- * messages that suggest the item was completed.
+ * Uses multiple heuristics:
+ * 1. Explicit checklist markers (✓, [x], ✅) with item description
+ * 2. Completion patterns with item keywords
+ * 3. File creation/modification patterns for relevant items
+ * 4. Direct mention of item number completion
  */
 function updateChecklistFromResults(
   task: taskService.Task,
@@ -455,33 +457,101 @@ function updateChecklistFromResults(
   // Combine all activity messages into a single searchable text
   const activityText = activityLog
     .map((entry) => entry.message.toLowerCase())
-    .join(" ");
+    .join("\n");
+
+  // Also track which files were changed
+  const filesChanged = new Set<string>();
+  for (const entry of activityLog) {
+    const msg = entry.message.toLowerCase();
+    // Extract file paths from "Using tool: Write" or similar messages
+    const writeMatch = msg.match(/(?:write|edit|create|wrote|created).*?(?:file[:\s]+)?([a-z0-9_\-./]+\.[a-z]+)/i);
+    if (writeMatch) {
+      filesChanged.add(writeMatch[1]!.toLowerCase());
+    }
+  }
+
+  // Completion patterns - expanded list
+  const completionPatterns = [
+    "completed",
+    "finished",
+    "done",
+    "success",
+    "implemented",
+    "added",
+    "created",
+    "updated",
+    "wrote",
+    "fixed",
+    "configured",
+    "installed",
+    "set up",
+    "setup",
+    "verified",
+    "tested",
+    "passed",
+    "working",
+    "✓",
+    "✅",
+    "[x]",
+    "complete",
+  ];
+
+  // Patterns that indicate explicit checklist completion
+  const explicitChecklistPatterns = [
+    /checklist\s+item\s+(\d+)\s*(?:is\s+)?(?:done|completed|finished)/gi,
+    /item\s+(\d+)\s*:?\s*(?:done|completed|finished)/gi,
+    /completed\s+(?:checklist\s+)?item\s+(\d+)/gi,
+    /\[x\]\s+\d+\./gi,
+    /✓\s+\d+\./gi,
+  ];
 
   // Update checklist items based on activity log content
-  return task.checklist.map((item) => {
+  return task.checklist.map((item, index) => {
     if (item.completed) {
       // Already completed, no need to update
       return item;
     }
 
-    // Extract keywords from checklist item description (words > 3 chars)
-    const keywords = item.description
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((word) => word.length > 3 && /^[a-z]+$/.test(word));
+    const itemNum = index + 1;
+    const descLower = item.description.toLowerCase();
 
-    // Check if activity log mentions completion-related keywords
-    // along with item-specific keywords
-    const completionPatterns = [
-      "completed",
-      "finished",
-      "done",
-      "success",
-      "implemented",
-      "added",
-      "created",
-      "updated",
-    ];
+    // Check for explicit checklist item completion mentions
+    for (const pattern of explicitChecklistPatterns) {
+      const matches = activityText.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] && parseInt(match[1], 10) === itemNum) {
+          return { ...item, completed: true };
+        }
+      }
+    }
+
+    // Check if activity explicitly mentions completing this item by description
+    if (activityText.includes(`completed: ${descLower}`) ||
+        activityText.includes(`done: ${descLower}`) ||
+        activityText.includes(`✓ ${descLower}`) ||
+        activityText.includes(`[x] ${descLower}`)) {
+      return { ...item, completed: true };
+    }
+
+    // Extract keywords from checklist item description (words > 2 chars)
+    const keywords = descLower
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && /^[a-z]+$/.test(word))
+      .filter((word) => !["the", "and", "for", "with", "from", "that", "this"].includes(word));
+
+    // Check if file names in the checklist item were created/modified
+    const fileExtensions = [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".css", ".html"];
+    for (const ext of fileExtensions) {
+      const filePattern = new RegExp(`([a-z0-9_\\-]+${ext.replace(".", "\\.")})`, "gi");
+      const fileMatches = descLower.match(filePattern);
+      if (fileMatches) {
+        for (const file of fileMatches) {
+          if (filesChanged.has(file.toLowerCase())) {
+            return { ...item, completed: true };
+          }
+        }
+      }
+    }
 
     // Count how many item keywords appear in activity text
     const keywordMatches = keywords.filter((kw) =>
@@ -493,9 +563,12 @@ function updateChecklistFromResults(
       activityText.includes(pattern),
     ).length;
 
-    // If we have at least 2 keyword matches and at least 1 completion pattern,
-    // mark the item as completed
-    const shouldComplete = keywordMatches >= 2 && completionMatches >= 1;
+    // More lenient matching: 
+    // - If 50%+ of keywords match AND at least 1 completion pattern
+    // - Or if very specific keywords match (e.g., function names, file names)
+    const keywordRatio = keywords.length > 0 ? keywordMatches / keywords.length : 0;
+    const shouldComplete = (keywordRatio >= 0.5 && completionMatches >= 1) ||
+                          (keywordMatches >= 3 && completionMatches >= 1);
 
     return {
       ...item,
@@ -530,6 +603,10 @@ async function completeRun(
     }
   }
 
+  // Track checklist completion for summary
+  let checklistCompleted = 0;
+  let checklistTotal = 0;
+
   // Update task status and checklist if this run is associated with a task
   if (run.taskId) {
     const taskStatus = status === "completed" ? "done" : "failed";
@@ -542,6 +619,8 @@ async function completeRun(
           task,
           run.activityLog,
         );
+        checklistTotal = updatedChecklist.length;
+        checklistCompleted = updatedChecklist.filter(item => item.completed).length;
         await taskService.update(run.projectId, run.taskId, {
           status: taskStatus,
           checklist: updatedChecklist,
@@ -553,7 +632,12 @@ async function completeRun(
         });
       }
     } else {
-      // Failed execution, just update status
+      // Failed execution, just update status and get checklist stats
+      const task = await taskService.get(run.projectId, run.taskId);
+      if (task) {
+        checklistTotal = task.checklist.length;
+        checklistCompleted = task.checklist.filter(item => item.completed).length;
+      }
       await taskService.update(run.projectId, run.taskId, {
         status: taskStatus,
       });
@@ -563,23 +647,34 @@ async function completeRun(
   // Persist final run record
   await runService.save(run);
 
-  // Update progress file with final status
-  const finalMessage = status === "completed"
-    ? `Execution completed successfully. Files changed: ${summary.filesChanged}, Total time: ${summary.totalTime}s, Iterations: ${summary.iterations}, Errors: ${summary.errors}`
-    : `Execution failed: ${errorMessage || "Unknown error"}`;
-  await progressService.appendProgressUpdate(
+  // Update progress file with structured summary
+  await progressService.appendProgressSummary(
     run.projectId,
     run.id,
-    finalMessage
+    {
+      status,
+      completedAt: run.completedAt!,
+      durationSeconds: summary.totalTime,
+      filesChanged: summary.filesChanged,
+      checklistCompleted,
+      checklistTotal,
+      costUsd: run.costUsd,
+      error: errorMessage,
+    }
   );
 
-  // Emit run status event
+  // Emit run status event with extended summary
   emitRunEvent(run, {
     type: "run-status",
     data: {
       status,
       error: errorMessage,
-      summary: summary as unknown as Record<string, unknown>,
+      summary: {
+        ...summary,
+        checklistCompleted,
+        checklistTotal,
+        costUsd: run.costUsd ?? null,
+      } as unknown as Record<string, unknown>,
     },
   });
 
