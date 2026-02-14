@@ -12,7 +12,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { Plus, Save, Trash2, Download } from "lucide-react";
+import { Plus, Save, Trash2, Download, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import ErrorCard from "../components/ErrorCard";
 import TeamCanvas from "../components/canvas/TeamCanvas";
 import AgentSidebar from "../components/sidebar/AgentSidebar";
@@ -49,6 +49,7 @@ interface Team {
   description: string;
   agents: TeamAgent[];
   edges: TeamEdge[];
+  processWorkflow?: string;
 }
 
 function agentsToNodes(agents: TeamAgent[]): Node[] {
@@ -150,6 +151,12 @@ function TeamDetailContent() {
     text: string;
   } | null>(null);
 
+  // Workflow generation state
+  const [generatingWorkflow, setGeneratingWorkflow] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [showWorkflow, setShowWorkflow] = useState(false);
+  const [editedWorkflow, setEditedWorkflow] = useState("");
+
   // Track whether initial load is complete to avoid marking dirty during load
   const initialLoadComplete = useRef(false);
 
@@ -170,6 +177,8 @@ function TeamDetailContent() {
         setTeam(data);
         setEditedName(data.name);
         setEditedDescription(data.description);
+        setEditedWorkflow(data.processWorkflow || "");
+        setShowWorkflow(!!data.processWorkflow);
         setNodes(agentsToNodes(data.agents));
         setEdges(teamEdgesToFlowEdges(data.edges));
         setIsDirty(false);
@@ -186,6 +195,20 @@ function TeamDetailContent() {
     }
 
     fetchTeam();
+    
+    // Check if API key is configured
+    async function checkApiKey() {
+      try {
+        const res = await fetch("/api/settings/status");
+        if (res.ok) {
+          const data = await res.json();
+          setHasApiKey(data.hasApiKey);
+        }
+      } catch {
+        setHasApiKey(false);
+      }
+    }
+    checkApiKey();
   }, [id, setNodes, setEdges]);
 
   // beforeunload event for browser refresh/tab close
@@ -402,6 +425,7 @@ function TeamDetailContent() {
       description: editedDescription,
       agents: nodesToAgents(nodes),
       edges: flowEdgesToTeamEdges(edges),
+      processWorkflow: editedWorkflow || undefined,
     };
 
     try {
@@ -419,6 +443,7 @@ function TeamDetailContent() {
       setTeam(updatedTeam);
       setEditedName(updatedTeam.name);
       setEditedDescription(updatedTeam.description);
+      setEditedWorkflow(updatedTeam.processWorkflow || "");
       setIsDirty(false);
       setSaveMessage({ type: "success", text: "Team saved successfully" });
     } catch (err) {
@@ -496,6 +521,47 @@ function TeamDetailContent() {
       setExporting(false);
     }
   }, [team]);
+
+  const handleProcessTeam = useCallback(async () => {
+    if (!team) return;
+
+    setGeneratingWorkflow(true);
+    setSaveMessage(null);
+
+    try {
+      const res = await fetch("/api/generate/team-workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: team.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to generate workflow");
+      }
+
+      const data = await res.json();
+      setEditedWorkflow(data.workflow);
+      setShowWorkflow(true);
+      markDirty();
+      setSaveMessage({ type: "success", text: "Workflow generated! Save to persist." });
+    } catch (err) {
+      setSaveMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to generate workflow",
+      });
+    } finally {
+      setGeneratingWorkflow(false);
+    }
+  }, [team, markDirty]);
+
+  const handleWorkflowChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setEditedWorkflow(e.target.value);
+      markDirty();
+    },
+    [markDirty],
+  );
 
   // Find the selected node's data for the sidebar
   const selectedNode = selectedNodeId
@@ -683,7 +749,65 @@ function TeamDetailContent() {
           <Plus className="h-4 w-4" />
           Add Agent
         </button>
+        <button
+          onClick={handleProcessTeam}
+          disabled={generatingWorkflow || hasApiKey === false || nodes.length === 0 || isDirty}
+          title={
+            hasApiKey === false
+              ? "Set API key in Settings"
+              : nodes.length === 0
+                ? "Add agents first"
+                : isDirty
+                  ? "Save changes first"
+                  : "Generate team workflow with AI"
+          }
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary"
+        >
+          {generatingWorkflow ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Process Team
+            </>
+          )}
+        </button>
       </div>
+
+      {/* Workflow section (collapsible) */}
+      {(editedWorkflow || showWorkflow) && (
+        <div className="mt-4 rounded-lg border border-border bg-bg-primary p-4">
+          <button
+            type="button"
+            onClick={() => setShowWorkflow(!showWorkflow)}
+            className="flex w-full items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
+          >
+            {showWorkflow ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            View Workflow
+            {editedWorkflow && (
+              <span className="ml-1 text-xs text-text-secondary">
+                ({editedWorkflow.split("\n").length} lines)
+              </span>
+            )}
+          </button>
+          {showWorkflow && (
+            <textarea
+              value={editedWorkflow}
+              onChange={handleWorkflowChange}
+              rows={15}
+              className="mt-3 w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
+              placeholder="Team workflow will appear here after processing..."
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

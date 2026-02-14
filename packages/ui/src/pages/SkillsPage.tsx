@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, X } from "lucide-react";
+import { Plus, Trash2, Edit2, X, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import ErrorCard from "../components/ErrorCard";
 
 interface SkillSummary {
@@ -26,6 +26,9 @@ export default function SkillsPage() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   async function fetchSkills() {
     setLoading(true);
@@ -46,6 +49,20 @@ export default function SkillsPage() {
 
   useEffect(() => {
     fetchSkills();
+    
+    // Check if API key is configured
+    async function checkApiKey() {
+      try {
+        const res = await fetch("/api/settings/status");
+        if (res.ok) {
+          const data = await res.json();
+          setHasApiKey(data.hasApiKey);
+        }
+      } catch {
+        setHasApiKey(false);
+      }
+    }
+    checkApiKey();
   }, []);
 
   async function handleDelete(id: string, name: string) {
@@ -86,6 +103,7 @@ export default function SkillsPage() {
       });
       setShowCreateForm(false);
       setFormError(null);
+      setShowInstructions(!!skill.instructions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load skill");
     }
@@ -96,6 +114,41 @@ export default function SkillsPage() {
     setEditingSkill(null);
     setFormData({ name: "", description: "", instructions: "" });
     setFormError(null);
+    setShowInstructions(false);
+  }
+
+  async function handleGenerate() {
+    if (!formData.name.trim() || !formData.description.trim()) {
+      setFormError("Name and description are required to generate instructions");
+      return;
+    }
+
+    setGenerating(true);
+    setFormError(null);
+
+    try {
+      const res = await fetch("/api/generate/skill-instructions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to generate instructions");
+      }
+
+      const data = await res.json();
+      setFormData((prev) => ({ ...prev, instructions: data.instructions }));
+      setShowInstructions(true);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to generate instructions");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   function handleCancelForm() {
@@ -247,27 +300,67 @@ export default function SkillsPage() {
               />
             </div>
 
+            {/* Instructions section with Generate button */}
             <div className="mb-4">
-              <label
-                htmlFor="skill-instructions"
-                className="mb-1 block font-body text-sm font-medium text-text-primary"
-              >
-                Instructions
-              </label>
-              <textarea
-                id="skill-instructions"
-                value={formData.instructions}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    instructions: e.target.value,
-                  }))
-                }
-                required
-                rows={8}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
-                placeholder="Detailed instructions that will be injected into agent prompts..."
-              />
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowInstructions(!showInstructions)}
+                  className="flex items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
+                >
+                  {showInstructions ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  Instructions
+                  {formData.instructions && (
+                    <span className="ml-1 text-xs text-text-secondary">
+                      ({formData.instructions.split("\n").length} lines)
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={generating || hasApiKey === false}
+                  title={hasApiKey === false ? "Set API key in Settings" : "Generate instructions with AI"}
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-white px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary"
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
+              {showInstructions && (
+                <textarea
+                  id="skill-instructions"
+                  value={formData.instructions}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      instructions: e.target.value,
+                    }))
+                  }
+                  required
+                  rows={12}
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
+                  placeholder="Detailed instructions that will be injected into agent prompts..."
+                />
+              )}
+              {!showInstructions && !formData.instructions && (
+                <p className="text-sm text-text-secondary">
+                  Click "Generate" to create instructions from the name and description, or expand to write manually.
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3">

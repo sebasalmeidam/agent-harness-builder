@@ -15,6 +15,8 @@ export interface Agent {
   practices: string[];
   position: { x: number; y: number };
   model?: string;
+  capabilities?: string;
+  persona?: string;
 }
 
 export interface EdgeGate {
@@ -37,6 +39,7 @@ export interface Team {
   description: string;
   agents: Agent[];
   edges: Edge[];
+  processWorkflow?: string;
 }
 
 export interface TeamSummary {
