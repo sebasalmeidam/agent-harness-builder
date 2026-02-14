@@ -17,6 +17,7 @@ import * as runService from "./run-service.js";
 import * as taskService from "./task-service.js";
 import { exportHarness } from "./harness-service.js";
 import * as progressService from "./progress-service.js";
+import * as configService from "./config-service.js";
 
 // --- Types ---
 
@@ -757,7 +758,8 @@ async function tryRealSdkExecution(
   // When the key is not set, return { executed: false } so the caller
   // falls back to simulation. This keeps simulation running freely
   // without requiring any credentials.
-  if (!process.env["ANTHROPIC_API_KEY"]) {
+  const apiKey = await configService.getApiKey();
+  if (!apiKey) {
     return { executed: false };
   }
 

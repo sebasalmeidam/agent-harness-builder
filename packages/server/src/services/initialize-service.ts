@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import * as configService from "./config-service.js";
 
 const MAX_DEPTH = 3;
 const MAX_SOURCE_FILES = 20;
@@ -171,10 +172,10 @@ export async function generateSuggestions(
   projectDescription: string,
   directoryContext: string
 ): Promise<TaskSuggestion[]> {
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
+  const apiKey = await configService.getApiKey();
 
   if (!apiKey) {
-    const error = new Error("ANTHROPIC_API_KEY not configured");
+    const error = new Error("API key not configured. Set it in Settings.");
     (error as Error & { code: string }).code = "NO_API_KEY";
     throw error;
   }
