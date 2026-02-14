@@ -414,7 +414,15 @@ export default function ExecutionPage() {
         <ErrorCard message={activeState.error} className="mb-6" />
       )}
 
-      {/* Two column layout: Left = Activity Log, Right = Checklist + Team Progress */}
+      {/* Team Progress - top level, always visible */}
+      <section className="mb-6">
+        <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+          {teamName ? `Team (${teamName})` : "Team Progress"}
+        </h2>
+        <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
+      </section>
+
+      {/* Two column layout: Left = Activity Log, Right = Checklist */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Activity Log (takes 2 columns) */}
         <section className="lg:col-span-2">
@@ -424,7 +432,7 @@ export default function ExecutionPage() {
           <ActivityLog entries={activeState.activityLog} />
         </section>
 
-        {/* Right column: Checklist + Team Progress */}
+        {/* Right column: Checklist */}
         <div className="space-y-6">
           {/* Checklist Panel */}
           {taskId && checklist.length > 0 && (
@@ -441,14 +449,6 @@ export default function ExecutionPage() {
               />
             </section>
           )}
-
-          {/* Team Progress */}
-          <section>
-            <h2 className="mb-3 font-heading text-xl font-semibold text-black">
-              {teamName ? `Team (${teamName})` : "Team Progress"}
-            </h2>
-            <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
-          </section>
         </div>
       </div>
 

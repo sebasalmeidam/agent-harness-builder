@@ -475,6 +475,16 @@ export default function TaskDetailPanel({
           <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
         </div>
 
+        {/* Team Agent Status */}
+        {teamAgents.length > 0 && Object.keys(agentStatuses).length > 0 && (
+          <div className="mb-4">
+            <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
+              Team Progress
+            </label>
+            <TeamProgress agents={teamAgents} agentStatuses={agentStatuses} />
+          </div>
+        )}
+
         {/* View Execution Prompt Toggle */}
         {editTeamId && (
           <div className="mb-4">
@@ -542,16 +552,6 @@ export default function TaskDetailPanel({
         {saving && (
           <div className="mt-4 font-body text-xs text-text-secondary">
             Saving...
-          </div>
-        )}
-
-        {/* Team Agent Status */}
-        {teamAgents.length > 0 && Object.keys(agentStatuses).length > 0 && (
-          <div className="mt-4">
-            <h4 className="mb-2 font-body text-sm font-medium text-text-secondary">
-              Team Progress
-            </h4>
-            <TeamProgress agents={teamAgents} agentStatuses={agentStatuses} />
           </div>
         )}
 
