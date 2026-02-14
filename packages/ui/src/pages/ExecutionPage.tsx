@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
+import { XCircle } from "lucide-react";
 import ErrorCard from "../components/ErrorCard";
 import { useExecutionSSE } from "../hooks/useExecutionSSE";
 import type { ExecutionSSEState } from "../hooks/useExecutionSSE";
@@ -7,7 +8,15 @@ import TeamProgress from "../components/execution/TeamProgress";
 import ActivityLog from "../components/execution/ActivityLog";
 import FileList from "../components/execution/FileList";
 import ExecutionSummaryCard from "../components/execution/ExecutionSummaryCard";
+import ChecklistPanel from "../components/execution/ChecklistPanel";
+import CostCounter from "../components/execution/CostCounter";
 import type { AgentInfo } from "../components/execution/TeamProgress";
+import type { ChecklistItem } from "../components/execution/ChecklistPanel";
+
+interface RunData {
+  costUsd?: number | null;
+  taskId?: string | null;
+}
 
 /**
  * Returns a Tailwind badge class for the overall run status.
@@ -20,7 +29,7 @@ function getRunStatusBadge(status: string | null): {
     case "running":
       return {
         label: "Running",
-        className: "bg-warning-light text-warning",
+        className: "bg-info-light text-info animate-pulse",
       };
     case "completed":
       return {
@@ -30,12 +39,12 @@ function getRunStatusBadge(status: string | null): {
     case "failed":
       return {
         label: "Failed",
-        className: "bg-primary-light text-primary",
+        className: "bg-error-light text-error",
       };
     default:
       return {
         label: "Connecting...",
-        className: "bg-info-light text-info",
+        className: "bg-[rgb(189,190,191)] text-text-secondary",
       };
   }
 }
@@ -82,6 +91,16 @@ export default function ExecutionPage() {
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
 
+  // Run data (for cost and taskId)
+  const [runData, setRunData] = useState<RunData>({});
+
+  // Task data (for checklist)
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+
+  // Cancel state
+  const [cancelling, setCancelling] = useState(false);
+
   // SSE hook: only activated when run is still "running" and initial check is done.
   // While historyLoading is true, pass undefined to suppress SSE connection.
   const shouldUseSSE = !isHistoryMode && !historyLoading;
@@ -103,6 +122,20 @@ export default function ExecutionPage() {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Fetch task checklist
+  const fetchTaskChecklist = useCallback(async (taskIdToFetch: string) => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskIdToFetch}`);
+      if (res.ok) {
+        const task = await res.json();
+        setChecklist(task.checklist ?? []);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [projectId]);
+
   // On mount, fetch run data via REST to determine mode
   useEffect(() => {
     if (!projectId || !runId) return;
@@ -118,6 +151,19 @@ export default function ExecutionPage() {
           return;
         }
         const data = await res.json();
+        
+        // Store run data for cost and taskId
+        setRunData({
+          costUsd: data.costUsd,
+          taskId: data.taskId,
+        });
+        
+        // Fetch task checklist if taskId exists
+        if (data.taskId) {
+          setTaskId(data.taskId);
+          fetchTaskChecklist(data.taskId);
+        }
+
         if (isTerminalStatus(data.status)) {
           // History mode: use REST data directly
           setHistoryData({
@@ -143,7 +189,7 @@ export default function ExecutionPage() {
     }
 
     checkRunStatus();
-  }, [projectId, runId]);
+  }, [projectId, runId, fetchTaskChecklist]);
 
   // Fetch project name for breadcrumb
   useEffect(() => {
@@ -202,6 +248,37 @@ export default function ExecutionPage() {
       }
     };
   }, [activeState.status]);
+
+  // Refresh checklist when activity log updates (agent may have completed items)
+  useEffect(() => {
+    if (taskId && activeState.activityLog.length > 0) {
+      // Debounce refresh to avoid too many requests
+      const timer = setTimeout(() => {
+        fetchTaskChecklist(taskId);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeState.activityLog.length, taskId, fetchTaskChecklist]);
+
+  // Handle cancel
+  const handleCancel = useCallback(async () => {
+    if (!projectId || !runId || cancelling) return;
+
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/runs/${runId}/cancel`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        console.error("Failed to cancel run");
+      }
+    } catch (err) {
+      console.error("Failed to cancel run:", err);
+    } finally {
+      setCancelling(false);
+    }
+  }, [projectId, runId, cancelling]);
 
   // Show loading while determining mode
   if (historyLoading) {
@@ -262,6 +339,9 @@ export default function ExecutionPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Cost Counter */}
+          <CostCounter costUsd={runData.costUsd} />
+
           {/* Connection status (only in live mode) */}
           {showConnectionStatus && (
             <div className="flex items-center gap-2" data-testid="connection-status">
@@ -287,6 +367,19 @@ export default function ExecutionPage() {
               {formatElapsed(elapsed)}
             </span>
           )}
+
+          {/* Cancel Button */}
+          {activeState.status === "running" && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="inline-flex items-center gap-2 rounded-md border border-error bg-error-light px-3 py-1.5 font-body text-sm font-medium text-error transition-colors hover:bg-error hover:text-white disabled:opacity-50"
+              data-testid="cancel-button"
+            >
+              <XCircle className="h-4 w-4" />
+              {cancelling ? "Cancelling..." : "Cancel"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -295,21 +388,43 @@ export default function ExecutionPage() {
         <ErrorCard message={activeState.error} className="mb-6" />
       )}
 
-      {/* Team Progress */}
-      <section className="mb-6">
-        <h2 className="mb-3 font-heading text-xl font-semibold text-black">
-          {teamName ? `Team Progress (${teamName})` : "Team Progress"}
-        </h2>
-        <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
-      </section>
+      {/* Two column layout: Left = Activity Log, Right = Checklist + Team Progress */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Activity Log (takes 2 columns) */}
+        <section className="lg:col-span-2">
+          <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+            Activity Log
+          </h2>
+          <ActivityLog entries={activeState.activityLog} />
+        </section>
 
-      {/* Activity Log */}
-      <section className="mb-6">
-        <h2 className="mb-3 font-heading text-xl font-semibold text-black">
-          Activity Log
-        </h2>
-        <ActivityLog entries={activeState.activityLog} />
-      </section>
+        {/* Right column: Checklist + Team Progress */}
+        <div className="space-y-6">
+          {/* Checklist Panel */}
+          {taskId && checklist.length > 0 && (
+            <section>
+              <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+                Task Checklist
+              </h2>
+              <ChecklistPanel
+                items={checklist}
+                projectId={projectId!}
+                taskId={taskId}
+                onUpdate={() => fetchTaskChecklist(taskId)}
+                readOnly={activeState.status === "running"}
+              />
+            </section>
+          )}
+
+          {/* Team Progress */}
+          <section>
+            <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+              {teamName ? `Team (${teamName})` : "Team Progress"}
+            </h2>
+            <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
+          </section>
+        </div>
+      </div>
 
       {/* Output section: Files and Summary */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

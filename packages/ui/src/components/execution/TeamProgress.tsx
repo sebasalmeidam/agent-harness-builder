@@ -15,9 +15,8 @@ interface TeamProgressProps {
 }
 
 /**
- * Maps agent status to Tailwind badge styles per design system:
- * idle = info (blue), working = warning (yellow/animate-pulse),
- * done = success (green), blocked = primary (red).
+ * Maps agent status to Tailwind badge styles per ADR-025 spec:
+ * idle = gray, working = blue-pulse, done = green, error/blocked = red/yellow
  */
 function getStatusBadge(status: AgentStatus): {
   label: string;
@@ -27,12 +26,12 @@ function getStatusBadge(status: AgentStatus): {
     case "idle":
       return {
         label: "Idle",
-        className: "bg-info-light text-info",
+        className: "bg-[rgb(189,190,191)] text-text-secondary",
       };
     case "working":
       return {
         label: "Working",
-        className: "bg-warning-light text-warning animate-pulse",
+        className: "bg-info-light text-info animate-pulse",
       };
     case "done":
       return {
@@ -42,7 +41,7 @@ function getStatusBadge(status: AgentStatus): {
     case "blocked":
       return {
         label: "Blocked",
-        className: "bg-primary-light text-primary",
+        className: "bg-warning-light text-warning",
       };
   }
 }

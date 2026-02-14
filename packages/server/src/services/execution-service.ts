@@ -307,6 +307,54 @@ export function offRunEvent(runId: string, callback: RunEventCallback): void {
   }
 }
 
+/** Map of run IDs to their abort controllers for cancellation. */
+const runAbortControllers = new Map<string, AbortController>();
+
+/**
+ * Cancels an active execution run.
+ * Returns true if the run was found and cancelled, false otherwise.
+ */
+export async function cancelRun(
+  projectId: string,
+  runId: string
+): Promise<boolean> {
+  const run = activeRuns.get(runId);
+  if (!run || run.projectId !== projectId || run.status !== "running") {
+    return false;
+  }
+
+  // Abort the SDK execution if there's an abort controller
+  const abortController = runAbortControllers.get(runId);
+  if (abortController) {
+    abortController.abort();
+    runAbortControllers.delete(runId);
+  }
+
+  // Add cancellation activity entry
+  addActivityEntry(run, {
+    timestamp: new Date().toISOString(),
+    agentId: "system",
+    agentEmoji: "",
+    agentName: "System",
+    message: "Execution cancelled by user",
+    type: "error",
+  });
+
+  // Complete the run as failed with cancellation message
+  const startTime = new Date(run.startedAt).getTime();
+  const totalTime = Math.round((Date.now() - startTime) / 1000);
+  const summary: ExecutionSummary = {
+    filesChanged: run.files.length,
+    totalTime,
+    iterations: run.activityLog.length,
+    errors: run.activityLog.filter((e) => e.type === "error").length,
+  };
+
+  await completeRun(run, "failed", summary, "Execution cancelled by user");
+
+  return true;
+}
+
 // --- Internal helpers ---
 
 /**

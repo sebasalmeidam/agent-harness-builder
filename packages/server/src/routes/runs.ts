@@ -113,6 +113,26 @@ router.get("/:runId", async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/runs/:runId/cancel - Cancel a running execution
+router.post("/:runId/cancel", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+    const runId = getParam(req.params, "runId");
+
+    const cancelled = await executionService.cancelRun(projectId, runId);
+    
+    if (!cancelled) {
+      res.status(404).json({ error: "Run not found or not active" });
+      return;
+    }
+
+    res.json({ success: true, message: "Run cancelled" });
+  } catch (err) {
+    console.error("Failed to cancel run:", err);
+    res.status(500).json({ error: "Failed to cancel run" });
+  }
+});
+
 // GET /api/projects/:id/runs/:runId/events - SSE stream for real-time events
 router.get("/:runId/events", async (req, res) => {
   try {
