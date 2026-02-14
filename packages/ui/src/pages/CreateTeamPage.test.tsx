@@ -66,10 +66,18 @@ describe("CreateTeamPage", () => {
     renderCreateTeam();
 
     expect(screen.getByRole("heading", { name: "Create Team" })).toBeTruthy();
+    expect(screen.getByLabelText(/Emoji/)).toBeTruthy();
     expect(screen.getByLabelText(/Team Name/)).toBeTruthy();
     expect(screen.getByLabelText(/Description/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create Team" })).toBeTruthy();
     expect(screen.getByText("Cancel")).toBeTruthy();
+  });
+
+  test("(1b) emoji field has default team emoji", () => {
+    renderCreateTeam();
+
+    const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+    expect(emojiTrigger.textContent).toBe("👥");
   });
 
   test("(2) submitting with empty name shows inline error text and red border class", async () => {
@@ -145,13 +153,14 @@ describe("CreateTeamPage", () => {
       expect(router.state.location.pathname).toBe("/teams/my-new-team");
     });
 
-    // Verify the correct data was sent
+    // Verify the correct data was sent (includes default emoji)
     expect(fetchMock).toHaveBeenCalledWith("/api/teams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "My New Team",
         description: "A great team",
+        emoji: "👥",
       }),
     });
   });
@@ -212,7 +221,44 @@ describe("CreateTeamPage", () => {
     expect(cancelLink.closest("a")?.getAttribute("href")).toBe("/teams");
   });
 
-  test("(8) typing in the name field after validation failure clears the inline error text and removes the red border class", async () => {
+  test("(8) submission includes custom emoji when changed", async () => {
+    const { router } = renderCreateTeam();
+
+    // Open emoji picker and select fire emoji
+    const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+    fireEvent.click(emojiTrigger);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("emoji-picker-popover")).toBeTruthy();
+    });
+
+    const fireEmoji = screen.getByTestId("emoji-🔥");
+    fireEvent.click(fireEmoji);
+
+    const nameInput = screen.getByLabelText(/Team Name/);
+    fireEvent.change(nameInput, { target: { value: "Fire Team" } });
+
+    const submitButton = screen.getByText("Create Team", {
+      selector: "button",
+    });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/teams/fire-team");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/teams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Fire Team",
+        description: "",
+        emoji: "🔥",
+      }),
+    });
+  });
+
+  test("(9) typing in the name field after validation failure clears the inline error text and removes the red border class", async () => {
     renderCreateTeam();
 
     // First trigger the validation error

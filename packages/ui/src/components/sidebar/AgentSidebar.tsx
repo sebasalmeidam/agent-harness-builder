@@ -2,6 +2,8 @@ import { X, Trash2 } from "lucide-react";
 import type { AgentNodeData } from "../canvas/AgentNode";
 import TagList from "./TagList";
 import TextList from "./TextList";
+import EmojiPicker from "../emoji-picker/EmojiPicker";
+import { DEFAULT_EMOJIS } from "../emoji-picker/emoji-data";
 
 interface AgentSidebarProps {
   data: AgentNodeData;
@@ -79,13 +81,11 @@ export default function AgentSidebar({
             >
               Emoji
             </label>
-            <input
+            <EmojiPicker
               id="agent-emoji"
-              type="text"
               value={data.emoji}
-              onChange={(e) => handleFieldChange("emoji", e.target.value)}
-              className="w-full rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none"
-              data-testid="agent-emoji-input"
+              onChange={(emoji) => handleFieldChange("emoji", emoji)}
+              defaultEmoji={DEFAULT_EMOJIS.agent}
             />
           </div>
 

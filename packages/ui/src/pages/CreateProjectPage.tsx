@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import ErrorCard from "../components/ErrorCard";
+import EmojiPicker from "../components/emoji-picker/EmojiPicker";
+import { DEFAULT_EMOJIS } from "../components/emoji-picker/emoji-data";
 
 export default function CreateProjectPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [gitUrl, setGitUrl] = useState("");
-  const [emoji, setEmoji] = useState("\uD83D\uDCE6");
+  const [emoji, setEmoji] = useState(DEFAULT_EMOJIS.project);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -75,13 +77,14 @@ export default function CreateProjectPage() {
           >
             Emoji
           </label>
-          <input
-            id="project-emoji"
-            type="text"
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            className="mt-1 block w-20 rounded-md border border-border bg-bg-primary px-3 py-2 text-center text-[20px] leading-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="mt-1">
+            <EmojiPicker
+              id="project-emoji"
+              value={emoji}
+              onChange={setEmoji}
+              defaultEmoji={DEFAULT_EMOJIS.project}
+            />
+          </div>
         </div>
 
         <div>

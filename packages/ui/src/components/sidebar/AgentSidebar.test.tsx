@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { test, expect, vi, beforeEach } from "vitest";
 import AgentSidebar from "./AgentSidebar";
 import type { AgentNodeData } from "../canvas/AgentNode";
@@ -79,21 +79,31 @@ test("emits onChange when name is edited", () => {
 });
 
 test("renders emoji input with current value", () => {
-  renderSidebar(createMockData({ emoji: "\uD83E\uDD16" }));
+  renderSidebar(createMockData({ emoji: "🤖" }));
 
-  const input = screen.getByTestId("agent-emoji-input") as HTMLInputElement;
-  expect(input.value).toBe("\uD83E\uDD16");
+  // The emoji picker trigger displays the current emoji
+  const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+  expect(emojiTrigger.textContent).toBe("🤖");
 });
 
-test("emits onChange when emoji is edited", () => {
+test("emits onChange when emoji is edited", async () => {
   const onChange = vi.fn();
   renderSidebar(createMockData(), onChange);
 
-  const input = screen.getByTestId("agent-emoji-input");
-  fireEvent.change(input, { target: { value: "\uD83D\uDE80" } });
+  // Open emoji picker
+  const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+  fireEvent.click(emojiTrigger);
+
+  // Wait for popover and select rocket emoji
+  await waitFor(() => {
+    expect(screen.getByTestId("emoji-picker-popover")).toBeTruthy();
+  });
+
+  const rocketEmoji = screen.getByTestId("emoji-🚀");
+  fireEvent.click(rocketEmoji);
 
   expect(onChange).toHaveBeenCalledWith(
-    expect.objectContaining({ emoji: "\uD83D\uDE80" }),
+    expect.objectContaining({ emoji: "🚀" }),
   );
 });
 
