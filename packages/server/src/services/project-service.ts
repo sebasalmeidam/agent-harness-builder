@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile, rename, rm, mkdir, stat } from "node:fs/p
 import { join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { slugify } from "./team-service.js";
+import * as taskService from "./task-service.js";
 
 const DEFAULT_PROJECT_EMOJI = "\uD83D\uDCE6"; // package emoji 📦
 
@@ -119,8 +120,8 @@ export async function list(): Promise<ProjectSummary[]> {
         }
       }
 
-      // Task count defaults to 0 (will be implemented in ADR-019)
-      const taskCount = 0;
+      // Get task count from task service
+      const taskCount = await taskService.count(entry);
 
       summaries.push({
         id: project.id as string,
