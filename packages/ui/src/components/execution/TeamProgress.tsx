@@ -69,7 +69,7 @@ export default function TeamProgress({
       data-testid="team-progress"
     >
       {agents.map((agent, index) => {
-        const status = agentStatuses[agent.id] ?? "idle";
+        const status = agentStatuses[agent.name] ?? agentStatuses[agent.id] ?? "idle";
         const badge = getStatusBadge(status);
 
         return (

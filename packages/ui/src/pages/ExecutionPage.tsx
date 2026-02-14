@@ -207,14 +207,30 @@ export default function ExecutionPage() {
             if (teamRes.ok) {
               const teamData = await teamRes.json();
               setTeamName(teamData.name ?? "");
-              const agentInfos: AgentInfo[] = (teamData.agents ?? []).map(
+              const teamAgents: AgentInfo[] = (teamData.agents ?? []).map(
                 (a: { id: string; name: string; emoji: string }) => ({
                   id: a.id,
                   name: a.name,
                   emoji: a.emoji,
                 }),
               );
-              setAgents(agentInfos);
+
+              // Prepend Orchestrator if present in the run's agentStatuses
+              // (it's a synthetic agent not in the team definition)
+              const runRes = await fetch(`/api/projects/${projectId}/runs/${runId}`);
+              if (runRes.ok) {
+                const runData = await runRes.json();
+                const statuses = runData.agentStatuses ?? {};
+                if ("Orchestrator" in statuses) {
+                  teamAgents.unshift({
+                    id: "orchestrator",
+                    name: "Orchestrator",
+                    emoji: "🎯",
+                  });
+                }
+              }
+
+              setAgents(teamAgents);
             }
           }
         }
