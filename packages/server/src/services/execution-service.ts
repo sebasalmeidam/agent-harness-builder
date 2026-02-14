@@ -13,6 +13,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import * as projectService from "./project-service.js";
 import * as runService from "./run-service.js";
+import * as taskService from "./task-service.js";
 import { exportHarness } from "./harness-service.js";
 
 // --- Types ---
@@ -110,6 +111,7 @@ export async function startRun(
     id: runId,
     projectId,
     teamId: project.teamId,
+    taskId: null,
     status: "running",
     startedAt: new Date().toISOString(),
     completedAt: null,
@@ -132,6 +134,142 @@ export async function startRun(
 
   // Start asynchronous execution (fire-and-forget)
   executeRun(run, translatedTeam, harness, options).catch((err: unknown) => {
+    handleRunError(run, err);
+  });
+
+  return { runId };
+}
+
+/**
+ * Composes a task prompt from task title, description, and checklist.
+ * This is a testable utility function used by startTaskRun.
+ */
+export function composeTaskPrompt(task: taskService.Task): string {
+  const lines: string[] = [];
+
+  lines.push(`Task: ${task.title}`);
+  lines.push("");
+
+  if (task.description && task.description.trim().length > 0) {
+    lines.push(task.description);
+    lines.push("");
+  }
+
+  if (task.checklist && task.checklist.length > 0) {
+    lines.push("Checklist:");
+    for (let i = 0; i < task.checklist.length; i++) {
+      const item = task.checklist[i];
+      const checkbox = item!.completed ? "[x]" : "[ ]";
+      const suffix = item!.completed ? "  (already completed)" : "";
+      lines.push(`${i + 1}. ${checkbox} ${item!.description}${suffix}`);
+    }
+    lines.push("");
+    lines.push("Instructions: Complete the unchecked items in the checklist above. When you have completed an item, note it in your response.");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Starts a new execution run for a task.
+ *
+ * Validates that the task exists, has a team assigned, and is in a valid status for execution.
+ * Loads the task and team, exports the harness, translates it with the task prompt,
+ * creates the initial run record with taskId, and begins asynchronous execution.
+ *
+ * @param projectId - The project ID containing the task
+ * @param taskId - The task ID to execute
+ * @returns The run ID of the newly created run.
+ * @throws Error with code "NOT_FOUND" if the task does not exist.
+ * @throws Error with code "NO_TEAM" if the task has no assigned team.
+ * @throws Error with code "INVALID_STATUS" if the task status is "running" or "done".
+ */
+export async function startTaskRun(
+  projectId: string,
+  taskId: string
+): Promise<{ runId: string }> {
+  // Load task
+  const task = await taskService.get(projectId, taskId);
+  if (!task) {
+    const error = new Error("Task not found");
+    (error as Error & { code: string }).code = "NOT_FOUND";
+    throw error;
+  }
+
+  // Validate eligibility: task must have teamId not null
+  if (!task.teamId) {
+    const error = new Error("Task has no team assigned");
+    (error as Error & { code: string }).code = "NO_TEAM";
+    throw error;
+  }
+
+  // Validate eligibility: status must be "pending" or "failed"
+  if (task.status === "running" || task.status === "done") {
+    const error = new Error(`Task cannot be executed in status: ${task.status}`);
+    (error as Error & { code: string }).code = "INVALID_STATUS";
+    throw error;
+  }
+
+  // Update task status to "running"
+  await taskService.update(projectId, taskId, { status: "running" });
+
+  // Load project (for path)
+  const project = await projectService.get(projectId);
+  if (!project) {
+    // Restore task status to previous status if project not found
+    await taskService.update(projectId, taskId, { status: task.status });
+    const error = new Error("Project not found");
+    (error as Error & { code: string }).code = "NOT_FOUND";
+    throw error;
+  }
+
+  // Load team data and export harness
+  const harness = await exportHarness(task.teamId);
+
+  // Compose task prompt from task title, description, and checklist
+  const taskPrompt = composeTaskPrompt(task);
+
+  // Translate harness with task prompt
+  const translatedTeam = translateHarness(harness, taskPrompt);
+
+  // Generate run ID
+  const runId = randomUUID();
+
+  // Build initial agent statuses (all idle)
+  const agentStatuses: Record<string, AgentStatus> = {};
+  agentStatuses[translatedTeam.leadAgent.name] = "idle";
+  for (const teammate of translatedTeam.teammates) {
+    agentStatuses[teammate.name] = "idle";
+  }
+
+  // Create initial run record with taskId
+  const run: ExecutionRun = {
+    id: runId,
+    projectId,
+    teamId: task.teamId,
+    taskId,
+    status: "running",
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    agentStatuses,
+    activityLog: [],
+    files: [],
+    summary: null,
+    error: null,
+  };
+
+  // Persist initial run record
+  await runService.save(run);
+
+  // Store in active runs map
+  activeRuns.set(runId, run);
+
+  // Create event emitter for this run
+  const emitter = new EventEmitter();
+  runEmitters.set(runId, emitter);
+
+  // Start asynchronous execution (fire-and-forget)
+  executeTaskRun(run, translatedTeam, harness).catch((err: unknown) => {
     handleRunError(run, err);
   });
 
@@ -244,6 +382,7 @@ function addFileChange(run: ExecutionRun, filePath: string): void {
 
 /**
  * Completes a run with the given status and summary.
+ * If the run is associated with a task (taskId is not null), updates the task status.
  */
 async function completeRun(
   run: ExecutionRun,
@@ -266,6 +405,12 @@ async function completeRun(
     }
   }
 
+  // Update task status if this run is associated with a task
+  if (run.taskId) {
+    const taskStatus = status === "completed" ? "done" : "failed";
+    await taskService.update(run.projectId, run.taskId, { status: taskStatus });
+  }
+
   // Persist final run record
   await runService.save(run);
 
@@ -285,6 +430,18 @@ async function completeRun(
     activeRuns.delete(run.id);
     runEmitters.delete(run.id);
   }, 30_000);
+}
+
+/**
+ * Executes a task run. Uses the existing executeRun infrastructure.
+ * Task status updates happen in completeRun based on the presence of taskId.
+ */
+async function executeTaskRun(
+  run: ExecutionRun,
+  translatedTeam: TranslatedTeam,
+  harness: { agents: Array<{ id: string; name: string; emoji: string; skills?: string[] }> }
+): Promise<void> {
+  await executeRun(run, translatedTeam, harness, undefined);
 }
 
 /**
@@ -540,8 +697,8 @@ async function tryRealSdkExecution(
 
       prompt = lines.join("\n");
     } else {
-      // Backward compatible: use project spec
-      prompt = project.spec;
+      // Backward compatible: use project spec (default to empty if undefined)
+      prompt = project.spec || "";
     }
 
     // Update agent status to working

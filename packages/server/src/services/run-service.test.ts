@@ -12,6 +12,7 @@ function createTestRun(overrides: Partial<ExecutionRun> = {}): ExecutionRun {
     id: "run-001",
     projectId: "test-project",
     teamId: "test-team",
+    taskId: null,
     status: "running",
     startedAt: "2025-01-15T10:00:00.000Z",
     completedAt: null,

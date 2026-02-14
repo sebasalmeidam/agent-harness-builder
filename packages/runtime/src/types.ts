@@ -57,6 +57,7 @@ export interface ExecutionRun {
   id: string;
   projectId: string;
   teamId: string;
+  taskId: string | null;
   status: "running" | "completed" | "failed";
   startedAt: string;
   completedAt: string | null;

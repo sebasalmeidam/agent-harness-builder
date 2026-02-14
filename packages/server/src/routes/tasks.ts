@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as taskService from "../services/task-service.js";
 import * as projectService from "../services/project-service.js";
+import * as executionService from "../services/execution-service.js";
 
 const router = Router({ mergeParams: true });
 
@@ -140,6 +141,34 @@ router.delete("/:taskId", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete task:", err);
     res.status(500).json({ error: "Failed to delete task" });
+  }
+});
+
+// POST /api/projects/:id/tasks/:taskId/execute - Execute a task
+router.post("/:taskId/execute", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+    const taskId = getParam(req.params, "taskId");
+
+    const { runId } = await executionService.startTaskRun(projectId, taskId);
+    res.json({ runId });
+  } catch (err) {
+    if (err instanceof Error) {
+      const errorWithCode = err as Error & { code?: string };
+
+      if (errorWithCode.code === "NOT_FOUND") {
+        res.status(404).json({ error: err.message });
+        return;
+      }
+
+      if (errorWithCode.code === "NO_TEAM" || errorWithCode.code === "INVALID_STATUS") {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+    }
+
+    console.error("Failed to execute task:", err);
+    res.status(500).json({ error: "Failed to execute task" });
   }
 });
 
