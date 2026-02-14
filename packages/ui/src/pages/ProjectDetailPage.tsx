@@ -17,9 +17,11 @@ interface Project {
   name: string;
   description: string;
   path: string;
+  previousPaths?: string[];
   emoji: string;
   createdAt: string;
   updatedAt: string;
+  hasExecutedTasks?: boolean;
 }
 
 export default function ProjectDetailPage() {
@@ -315,6 +317,12 @@ export default function ProjectDetailPage() {
               onClick={async () => {
                 const trimmed = editingPath.trim();
                 if (!trimmed) return;
+                if (project.hasExecutedTasks) {
+                  const confirmed = window.confirm(
+                    "This project has tasks that were already executed using the previous path. Changing the path means new executions will target a different directory.\n\nThe previous path will be noted in execution prompts for context.\n\nContinue?"
+                  );
+                  if (!confirmed) return;
+                }
                 setSavingPath(true);
                 try {
                   const res = await fetch(`/api/projects/${project.id}`, {

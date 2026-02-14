@@ -26,6 +26,9 @@ export function composeExecutionPrompt(
   if (project.path && project.path.trim().length > 0) {
     lines.push(`Directory: ${project.path}.`);
   }
+  if (project.previousPaths && project.previousPaths.length > 0) {
+    lines.push(`Note: This project was previously located at: ${project.previousPaths.join(", ")}. Some earlier tasks may reference those paths.`);
+  }
   lines.push("");
 
   // Team Process section (if team has processWorkflow)

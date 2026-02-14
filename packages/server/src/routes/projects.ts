@@ -72,7 +72,8 @@ router.get("/:id", async (req, res) => {
       res.status(404).json({ error: "Project not found" });
       return;
     }
-    res.json(project);
+    const hasExecuted = await projectService.hasExecutedTasks(req.params["id"]!);
+    res.json({ ...project, hasExecutedTasks: hasExecuted });
   } catch (err) {
     console.error("Failed to get project:", err);
     res.status(500).json({ error: "Failed to get project" });

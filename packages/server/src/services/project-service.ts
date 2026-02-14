@@ -14,6 +14,7 @@ export interface Project {
   description: string;
   emoji: string;
   path: string;
+  previousPaths?: string[];
   createdAt: string;
   updatedAt: string;
   // Deprecated fields kept for backward compatibility (removed in ADR-021)
@@ -255,11 +256,18 @@ export async function update(
     return null;
   }
 
+  // Track path changes in previousPaths
+  let previousPaths = existing.previousPaths ?? [];
+  if (updates.path !== undefined && updates.path !== existing.path && existing.path) {
+    previousPaths = [...previousPaths, existing.path];
+  }
+
   const updatedProject: Project = {
     ...existing,
     ...updates,
     id, // Preserve original ID
-    path: updates.path !== undefined ? updates.path : existing.path, // Path can be updated
+    path: updates.path !== undefined ? updates.path : existing.path,
+    previousPaths,
     createdAt: existing.createdAt, // Never change createdAt
     updatedAt: new Date().toISOString(),
   };
@@ -270,6 +278,11 @@ export async function update(
   await rename(tmpPath, filePath);
 
   return updatedProject;
+}
+
+export async function hasExecutedTasks(id: string): Promise<boolean> {
+  const tasks = await taskService.list(id);
+  return tasks.some(t => t.status === "done" || t.status === "failed" || t.status === "running");
 }
 
 export async function remove(id: string): Promise<boolean> {
