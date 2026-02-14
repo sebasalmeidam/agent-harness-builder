@@ -69,8 +69,8 @@ export default function SettingsPage() {
     }
   }, [saveMessage, testResult]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave(e?: React.FormEvent) {
+    e?.preventDefault();
     setSaving(true);
     setSaveMessage(null);
     setTestResult(null);
@@ -162,8 +162,14 @@ export default function SettingsPage() {
 
   const hasConfiguredKey = settings?.apiKey && settings.apiKey.length > 0;
 
+  // Detect unsaved changes
+  const hasChanges =
+    apiKey.trim().length > 0 ||
+    defaultModel !== (settings?.defaultModel ?? "claude-sonnet-4-20250514") ||
+    defaultProjectsPath !== (settings?.defaultProjectsPath ?? "");
+
   return (
-    <div>
+    <div className="pb-20">
       <h1 className="mb-6 font-heading text-[28px] font-semibold text-black">
         Settings
       </h1>
@@ -319,31 +325,46 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Save Message */}
-          {saveMessage && (
-            <div
-              className={`mb-4 rounded-md border px-4 py-3 font-body text-sm ${
-                saveMessage.type === "success"
-                  ? "border-success-light bg-success-light text-success"
-                  : "border-error-light bg-error-light text-error"
-              }`}
-            >
-              {saveMessage.text}
-            </div>
-          )}
-
-          {/* Save Button */}
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-primary px-6 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Settings"}
-            </button>
-          </div>
         </form>
       </div>
+
+      {/* Sticky save bar — appears when there are unsaved changes */}
+      {(hasChanges || saveMessage) && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-white px-6 py-3 shadow-lg">
+          <div className="mx-auto flex max-w-4xl items-center justify-between">
+            <div className="flex items-center gap-3">
+              {saveMessage ? (
+                <span
+                  className={`font-body text-sm font-medium ${
+                    saveMessage.type === "success" ? "text-success" : "text-error"
+                  }`}
+                >
+                  {saveMessage.type === "success" ? (
+                    <CheckCircle className="mr-1.5 inline h-4 w-4" />
+                  ) : (
+                    <XCircle className="mr-1.5 inline h-4 w-4" />
+                  )}
+                  {saveMessage.text}
+                </span>
+              ) : hasChanges ? (
+                <span className="font-body text-sm font-medium text-amber-600">
+                  ● You have unsaved changes
+                </span>
+              ) : null}
+            </div>
+            {hasChanges && (
+              <button
+                type="button"
+                onClick={() => handleSave()}
+                disabled={saving}
+                className="rounded-lg bg-primary px-6 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Settings"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
