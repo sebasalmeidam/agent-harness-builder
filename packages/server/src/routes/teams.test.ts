@@ -288,6 +288,7 @@ describe("GET /api/teams/:id/harness", () => {
       skillIds: [],
       practices: ["TDD", "Code review"],
       position: { x: 100, y: 200 },
+      model: "claude-sonnet-4-20250514",
     });
     expect(res.body.agents[1]).toEqual({
       id: "agent-2",
@@ -299,6 +300,7 @@ describe("GET /api/teams/:id/harness", () => {
       skillIds: [],
       practices: ["SOLID"],
       position: { x: 300, y: 200 },
+      model: "claude-sonnet-4-20250514",
     });
     expect(res.body.edges).toHaveLength(1);
     expect(res.body.edges[0]).toEqual({
@@ -474,6 +476,7 @@ describe("POST /api/teams/import", () => {
         skillIds: [],
         practices: ["BDD", "Story mapping"],
         position: { x: 100, y: 150 },
+        model: "claude-sonnet-4-20250514",
       },
       {
         id: "rt-agent-2",
@@ -485,6 +488,7 @@ describe("POST /api/teams/import", () => {
         skillIds: [],
         practices: ["TDD"],
         position: { x: 300, y: 150 },
+        model: "claude-sonnet-4-20250514",
       },
     ];
 
