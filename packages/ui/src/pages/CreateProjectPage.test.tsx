@@ -78,8 +78,9 @@ describe("CreateProjectPage", () => {
   test("emoji field has default package emoji", () => {
     renderCreateProject();
 
-    const emojiInput = screen.getByLabelText(/Emoji/) as HTMLInputElement;
-    expect(emojiInput.value).toBe("\uD83D\uDCE6");
+    // The emoji picker trigger button displays the default package emoji
+    const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+    expect(emojiTrigger.textContent).toBe("📦");
   });
 
   test("validates name is required on submit", async () => {
@@ -270,8 +271,17 @@ describe("CreateProjectPage", () => {
   test("submission includes custom emoji when changed", async () => {
     const { router } = renderCreateProject();
 
-    const emojiInput = screen.getByLabelText(/Emoji/);
-    fireEvent.change(emojiInput, { target: { value: "\uD83D\uDE80" } });
+    // Open emoji picker
+    const emojiTrigger = screen.getByTestId("emoji-picker-trigger");
+    fireEvent.click(emojiTrigger);
+
+    // Wait for popover to appear and select rocket emoji
+    await waitFor(() => {
+      expect(screen.getByTestId("emoji-picker-popover")).toBeTruthy();
+    });
+
+    const rocketEmoji = screen.getByTestId("emoji-🚀");
+    fireEvent.click(rocketEmoji);
 
     const nameInput = screen.getByLabelText(/Project Name/);
     fireEvent.change(nameInput, { target: { value: "Rocket Project" } });
@@ -291,7 +301,7 @@ describe("CreateProjectPage", () => {
       body: JSON.stringify({
         name: "Rocket Project",
         description: "",
-        emoji: "\uD83D\uDE80",
+        emoji: "🚀",
       }),
     });
   });

@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import ErrorCard from "../components/ErrorCard";
+import EmojiPicker from "../components/emoji-picker/EmojiPicker";
+import { DEFAULT_EMOJIS } from "../components/emoji-picker/emoji-data";
 
 export default function CreateTeamPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [emoji, setEmoji] = useState(DEFAULT_EMOJIS.team);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +29,7 @@ export default function CreateTeamPage() {
       const res = await fetch("/api/teams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmedName, description: description.trim() }),
+        body: JSON.stringify({ name: trimmedName, description: description.trim(), emoji }),
       });
 
       if (!res.ok) {
@@ -53,6 +56,23 @@ export default function CreateTeamPage() {
         {error && (
           <ErrorCard message={error} />
         )}
+
+        <div>
+          <label
+            htmlFor="team-emoji"
+            className="block font-body text-sm font-medium text-black"
+          >
+            Emoji
+          </label>
+          <div className="mt-1">
+            <EmojiPicker
+              id="team-emoji"
+              value={emoji}
+              onChange={setEmoji}
+              defaultEmoji={DEFAULT_EMOJIS.team}
+            />
+          </div>
+        </div>
 
         <div>
           <label

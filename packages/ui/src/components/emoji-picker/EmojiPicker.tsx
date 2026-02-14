@@ -5,12 +5,14 @@ export interface EmojiPickerProps {
   value: string;
   onChange: (emoji: string) => void;
   defaultEmoji?: string;
+  id?: string;
 }
 
 export default function EmojiPicker({
   value,
   onChange,
   defaultEmoji = "😀",
+  id,
 }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,6 +74,7 @@ export default function EmojiPicker({
       {/* Trigger Button */}
       <button
         type="button"
+        id={id}
         onClick={handleTriggerClick}
         className="flex h-10 w-20 items-center justify-center rounded-md border border-border bg-bg-primary text-[24px] transition-colors hover:bg-bg-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         data-testid="emoji-picker-trigger"
