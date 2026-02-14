@@ -6,6 +6,15 @@ import TextList from "./TextList";
 import EmojiPicker from "../emoji-picker/EmojiPicker";
 import { DEFAULT_EMOJIS } from "../emoji-picker/emoji-data";
 
+// Predefined model options
+const PREDEFINED_MODELS = [
+  { id: "claude-sonnet-4-20250514", label: "Sonnet" },
+  { id: "claude-opus-4-20250514", label: "Opus" },
+  { id: "claude-haiku-3-5-20241022", label: "Haiku" },
+] as const;
+
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
 interface AgentSidebarProps {
   data: AgentNodeData;
   onChange: (data: AgentNodeData) => void;
@@ -27,6 +36,7 @@ export default function AgentSidebar({
 }: AgentSidebarProps) {
   const [availableSkills, setAvailableSkills] = useState<SkillSummary[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [customModelMode, setCustomModelMode] = useState(false);
 
   useEffect(() => {
     async function fetchSkills() {
@@ -47,6 +57,17 @@ export default function AgentSidebar({
     fetchSkills();
   }, []);
 
+  // Determine current model value and custom mode state
+  const currentModel = data.model ?? DEFAULT_MODEL;
+  const isPredefinedModel = PREDEFINED_MODELS.some(m => m.id === currentModel);
+
+  useEffect(() => {
+    // If model is not a predefined value, enable custom mode
+    if (!isPredefinedModel && currentModel !== DEFAULT_MODEL) {
+      setCustomModelMode(true);
+    }
+  }, [currentModel, isPredefinedModel]);
+
   function handleFieldChange(field: keyof AgentNodeData, value: unknown) {
     onChange({ ...data, [field]: value });
   }
@@ -65,6 +86,34 @@ export default function AgentSidebar({
     );
     if (confirmed) {
       onDelete();
+    }
+  }
+
+  function handleModelDropdownChange(value: string) {
+    if (value === "custom") {
+      setCustomModelMode(true);
+      // Keep the current model value when switching to custom mode
+    } else {
+      setCustomModelMode(false);
+      handleFieldChange("model", value);
+    }
+  }
+
+  function handleCustomModelChange(value: string) {
+    if (value.trim() === "") {
+      // Clearing custom input reverts to default
+      handleFieldChange("model", DEFAULT_MODEL);
+      setCustomModelMode(false);
+    } else {
+      handleFieldChange("model", value);
+    }
+  }
+
+  function handleBackToDropdown() {
+    setCustomModelMode(false);
+    // If current model is not predefined, revert to default
+    if (!isPredefinedModel) {
+      handleFieldChange("model", DEFAULT_MODEL);
     }
   }
 
@@ -160,6 +209,54 @@ export default function AgentSidebar({
               className="w-full resize-y rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none"
               data-testid="agent-goal-input"
             />
+          </div>
+
+          {/* Model */}
+          <div>
+            <label
+              htmlFor="agent-model"
+              className="mb-1 block font-body text-sm text-text-secondary"
+            >
+              Model
+            </label>
+            {!customModelMode ? (
+              <div className="space-y-2">
+                <select
+                  id="agent-model"
+                  value={isPredefinedModel ? currentModel : "custom"}
+                  onChange={(e) => handleModelDropdownChange(e.target.value)}
+                  className="w-full rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none"
+                  data-testid="agent-model-select"
+                >
+                  {PREDEFINED_MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  id="agent-model"
+                  type="text"
+                  value={currentModel}
+                  onChange={(e) => handleCustomModelChange(e.target.value)}
+                  placeholder="Enter custom model string"
+                  className="w-full rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none"
+                  data-testid="agent-model-custom-input"
+                />
+                <button
+                  type="button"
+                  onClick={handleBackToDropdown}
+                  className="font-body text-xs text-primary hover:underline"
+                  data-testid="agent-model-back-to-dropdown"
+                >
+                  Back to predefined models
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Skills (Entity) */}

@@ -451,7 +451,7 @@ describe("translateHarness", () => {
     expect(qaPrompt).toContain("Developer passes work to you");
   });
 
-  it("sets model for all agents", () => {
+  it("defaults model to claude-sonnet-4-20250514 when not specified", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({ id: "a1", name: "Lead" }),
@@ -464,6 +464,60 @@ describe("translateHarness", () => {
 
     expect(result.leadAgent.model).toBe("claude-sonnet-4-20250514");
     expect(result.teammates[0].model).toBe("claude-sonnet-4-20250514");
+  });
+
+  it("passes through explicit model from agent to TranslatedAgent", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "Lead", model: "claude-opus-4-20250514" }),
+        makeAgent({ id: "a2", name: "Dev", model: "claude-haiku-3-5-20241022" }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Custom models");
+
+    expect(result.leadAgent.model).toBe("claude-opus-4-20250514");
+    expect(result.teammates[0].model).toBe("claude-haiku-3-5-20241022");
+  });
+
+  it("allows lead and teammates to have different models", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "lead", name: "Lead", model: "claude-opus-4-20250514" }),
+        makeAgent({ id: "dev1", name: "Dev1", model: "claude-sonnet-4-20250514" }),
+        makeAgent({ id: "dev2", name: "Dev2", model: "claude-haiku-3-5-20241022" }),
+      ],
+      edges: [
+        makeEdge({ id: "e1", source: "dev1", target: "lead", type: "escalates-to" }),
+        makeEdge({ id: "e2", source: "dev2", target: "lead", type: "escalates-to" }),
+      ],
+    });
+
+    const result = translateHarness(harness, "Mixed models");
+
+    expect(result.leadAgent.name).toBe("Lead");
+    expect(result.leadAgent.model).toBe("claude-opus-4-20250514");
+    expect(result.teammates).toHaveLength(2);
+    expect(result.teammates.find((t) => t.name === "Dev1")?.model).toBe("claude-sonnet-4-20250514");
+    expect(result.teammates.find((t) => t.name === "Dev2")?.model).toBe("claude-haiku-3-5-20241022");
+  });
+
+  it("uses default model for agents without model field and custom model for agents with it", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({ id: "a1", name: "DefaultAgent" }),
+        makeAgent({ id: "a2", name: "CustomAgent", model: "custom-model-123" }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Mixed defaults");
+
+    expect(result.leadAgent.name).toBe("DefaultAgent");
+    expect(result.leadAgent.model).toBe("claude-sonnet-4-20250514");
+    expect(result.teammates[0].name).toBe("CustomAgent");
+    expect(result.teammates[0].model).toBe("custom-model-123");
   });
 
   it("includes team members list in lead agent prompt", () => {

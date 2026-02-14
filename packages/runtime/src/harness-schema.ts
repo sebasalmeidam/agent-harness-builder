@@ -15,6 +15,7 @@ export interface HarnessAgent {
   resolvedSkills?: Array<{ name: string; instructions: string }>;
   practices: string[];
   position: { x: number; y: number };
+  model?: string;
 }
 
 export interface HarnessEdge {

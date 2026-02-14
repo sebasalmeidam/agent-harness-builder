@@ -350,3 +350,205 @@ test("silently handles fetch error for skills", async () => {
     expect(screen.queryByText("Loading skills...")).toBeNull();
   });
 });
+
+test("renders model label", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar();
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("Model")).toBeTruthy();
+  });
+});
+
+test("renders model dropdown with default selection when model is undefined", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar(createMockData({ model: undefined }));
+
+  await waitFor(() => {
+    const select = screen.getByTestId("agent-model-select") as HTMLSelectElement;
+    expect(select.value).toBe("claude-sonnet-4-20250514");
+  });
+});
+
+test("renders model dropdown with current predefined model selected", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar(createMockData({ model: "claude-opus-4-20250514" }));
+
+  await waitFor(() => {
+    const select = screen.getByTestId("agent-model-select") as HTMLSelectElement;
+    expect(select.value).toBe("claude-opus-4-20250514");
+  });
+});
+
+test("selecting a predefined model calls onChange with that model", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ model: "claude-sonnet-4-20250514" }), onChange);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-select")).toBeTruthy();
+  });
+
+  const select = screen.getByTestId("agent-model-select");
+  fireEvent.change(select, { target: { value: "claude-haiku-3-5-20241022" } });
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ model: "claude-haiku-3-5-20241022" }),
+  );
+});
+
+test("selecting Custom option reveals text input", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar(createMockData({ model: "claude-sonnet-4-20250514" }));
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-select")).toBeTruthy();
+  });
+
+  const select = screen.getByTestId("agent-model-select");
+  fireEvent.change(select, { target: { value: "custom" } });
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-custom-input")).toBeTruthy();
+    expect(screen.queryByTestId("agent-model-select")).toBeNull();
+  });
+});
+
+test("typing a custom model value calls onChange", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ model: "claude-sonnet-4-20250514" }), onChange);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-select")).toBeTruthy();
+  });
+
+  // Switch to custom mode
+  const select = screen.getByTestId("agent-model-select");
+  fireEvent.change(select, { target: { value: "custom" } });
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-custom-input")).toBeTruthy();
+  });
+
+  // Type custom value
+  const input = screen.getByTestId("agent-model-custom-input");
+  fireEvent.change(input, { target: { value: "custom-model-xyz" } });
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ model: "custom-model-xyz" }),
+  );
+});
+
+test("clearing custom input reverts to default model", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ model: "custom-model-xyz" }), onChange);
+
+  // Should start in custom mode since model is not predefined
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-custom-input")).toBeTruthy();
+  });
+
+  const input = screen.getByTestId("agent-model-custom-input");
+  fireEvent.change(input, { target: { value: "" } });
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ model: "claude-sonnet-4-20250514" }),
+  );
+});
+
+test("model persists across sidebar open/close", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  const mockData = createMockData({ model: "claude-opus-4-20250514" });
+  const { unmount } = renderSidebar(mockData);
+
+  await waitFor(() => {
+    const select = screen.getByTestId("agent-model-select") as HTMLSelectElement;
+    expect(select.value).toBe("claude-opus-4-20250514");
+  });
+
+  // Unmount (simulate closing)
+  unmount();
+
+  // Re-render with same data (simulate reopening)
+  renderSidebar(mockData);
+
+  await waitFor(() => {
+    const select = screen.getByTestId("agent-model-select") as HTMLSelectElement;
+    expect(select.value).toBe("claude-opus-4-20250514");
+  });
+});
+
+test("back to dropdown button reverts to default when custom model is not predefined", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  const onChange = vi.fn();
+  renderSidebar(createMockData({ model: "custom-model-xyz" }), onChange);
+
+  // Should start in custom mode
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-custom-input")).toBeTruthy();
+  });
+
+  const backButton = screen.getByTestId("agent-model-back-to-dropdown");
+  fireEvent.click(backButton);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-select")).toBeTruthy();
+  });
+
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ model: "claude-sonnet-4-20250514" }),
+  );
+});
+
+test("displays custom input when agent has non-predefined model", async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true,
+    json: async () => [],
+  });
+
+  renderSidebar(createMockData({ model: "my-custom-model-2024" }));
+
+  await waitFor(() => {
+    expect(screen.getByTestId("agent-model-custom-input")).toBeTruthy();
+    const input = screen.getByTestId("agent-model-custom-input") as HTMLInputElement;
+    expect(input.value).toBe("my-custom-model-2024");
+  });
+});
