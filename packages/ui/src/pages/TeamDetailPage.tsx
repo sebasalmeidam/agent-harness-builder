@@ -749,35 +749,23 @@ function TeamDetailContent() {
       {/* Workflow section (collapsible) */}
       {(editedWorkflow || showWorkflow) && (
         <div className="mt-4 rounded-lg border border-border bg-bg-primary p-4">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setShowWorkflow(!showWorkflow)}
-              className="flex items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
-            >
-              {showWorkflow ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              View Workflow
-              {editedWorkflow && (
-                <span className="ml-1 text-xs text-text-secondary">
-                  ({editedWorkflow.split("\n").length} lines)
-                </span>
-              )}
-            </button>
-            {isDirty && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 font-body text-xs font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                <Save className="h-3 w-3" />
-                {saving ? "Saving..." : "Save"}
-              </button>
+          <button
+            type="button"
+            onClick={() => setShowWorkflow(!showWorkflow)}
+            className="flex w-full items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
+          >
+            {showWorkflow ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
             )}
-          </div>
+            View Workflow
+            {editedWorkflow && (
+              <span className="ml-1 text-xs text-text-secondary">
+                ({editedWorkflow.split("\n").length} lines)
+              </span>
+            )}
+          </button>
           {showWorkflow && (
             <textarea
               value={editedWorkflow}
