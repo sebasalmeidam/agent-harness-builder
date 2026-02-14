@@ -88,6 +88,15 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
+  // Validate path if being updated
+  if (updates.path !== undefined) {
+    const pathVal = await projectService.validateProjectPath(updates.path);
+    if (!pathVal.valid) {
+      res.status(400).json({ error: pathVal.error });
+      return;
+    }
+  }
+
   try {
     const updated = await projectService.update(req.params["id"]!, updates);
     if (!updated) {

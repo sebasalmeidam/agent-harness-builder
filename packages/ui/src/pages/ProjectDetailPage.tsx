@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Trash2, FolderOpen, AlertTriangle } from "lucide-react";
+import { Trash2, FolderOpen } from "lucide-react";
 import TaskList from "../components/tasks/TaskList";
 import TaskDetailPanel from "../components/tasks/TaskDetailPanel";
 import InitializeButton from "../components/tasks/InitializeButton";
@@ -295,16 +295,39 @@ export default function ProjectDetailPage() {
             Project Path
           </h2>
         </div>
-        <p
-          className="font-body text-sm font-mono text-text-secondary break-all"
-          data-testid="project-path"
-        >
-          {project.path || (
-            <span className="flex items-center gap-1 text-warning">
-              <AlertTriangle className="h-4 w-4" />
-              Path not configured
-            </span>
-          )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            className="flex-1 rounded-md border border-border bg-bg-secondary px-3 py-1.5 font-body text-sm font-mono text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="project-path"
+            value={project.path || ""}
+            placeholder="/absolute/path/to/project"
+            onChange={(e) => setProject({ ...project, path: e.target.value })}
+            onBlur={async () => {
+              const trimmed = (project.path || "").trim();
+              if (!trimmed) return;
+              try {
+                const res = await fetch(`/api/projects/${project.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ path: trimmed }),
+                });
+                if (!res.ok) {
+                  const data = await res.json();
+                  setSaveMessage({ type: "error", text: data.error || "Failed to update path" });
+                } else {
+                  const updated = await res.json();
+                  setProject(updated);
+                  setSaveMessage({ type: "success", text: "Path updated" });
+                }
+              } catch {
+                setSaveMessage({ type: "error", text: "Failed to update path" });
+              }
+            }}
+          />
+        </div>
+        <p className="mt-1 font-body text-xs text-text-secondary">
+          Absolute path to the project directory. Created automatically if it doesn't exist.
         </p>
       </div>
 

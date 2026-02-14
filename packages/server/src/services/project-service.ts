@@ -259,7 +259,7 @@ export async function update(
     ...existing,
     ...updates,
     id, // Preserve original ID
-    path: existing.path, // Path is immutable after creation
+    path: updates.path !== undefined ? updates.path : existing.path, // Path can be updated
     createdAt: existing.createdAt, // Never change createdAt
     updatedAt: new Date().toISOString(),
   };
