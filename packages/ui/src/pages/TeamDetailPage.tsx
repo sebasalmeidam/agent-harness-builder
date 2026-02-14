@@ -612,7 +612,7 @@ function TeamDetailContent() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] flex-col">
+    <div className="flex h-[calc(100vh-2rem)] flex-col pb-16">
       {/* Breadcrumb */}
       <nav className="mb-2 font-body text-sm text-text-secondary">
         <Link to="/teams" className="hover:text-primary">
@@ -623,7 +623,7 @@ function TeamDetailContent() {
       </nav>
 
       {/* Team header */}
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-3 flex items-start justify-between gap-4">
         <div className="flex-1">
           <input
             type="text"
@@ -642,15 +642,6 @@ function TeamDetailContent() {
           />
           <p className="mt-1 font-body text-xs text-text-secondary">
             {nodes.length} {nodes.length === 1 ? "agent" : "agents"}
-            {isDirty && (
-              <span
-                className="ml-2 inline-flex items-center gap-1 text-primary"
-                data-testid="dirty-indicator"
-              >
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                Unsaved changes
-              </span>
-            )}
           </p>
         </div>
 
@@ -678,30 +669,45 @@ function TeamDetailContent() {
             <Download className="h-4 w-4" />
             Export Harness
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? "Saving..." : "Save"}
-          </button>
         </div>
       </div>
 
-      {/* Save message */}
-      {saveMessage && (
-        <div
-          className={`mb-3 rounded-md border px-4 py-2 font-body text-sm ${
-            saveMessage.type === "success"
-              ? "border-green-200 bg-green-50 text-green-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-          role="status"
+      {/* Toolbar: Add Agent + Process Team */}
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          onClick={handleAddAgent}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary"
         >
-          {saveMessage.text}
-        </div>
-      )}
+          <Plus className="h-4 w-4" />
+          Add Agent
+        </button>
+        <button
+          onClick={handleProcessTeam}
+          disabled={generatingWorkflow || hasApiKey === false || nodes.length === 0 || isDirty}
+          title={
+            hasApiKey === false
+              ? "Set API key in Settings"
+              : nodes.length === 0
+                ? "Add agents first"
+                : isDirty
+                  ? "Save changes first"
+                  : "Generate team workflow with AI"
+          }
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary"
+        >
+          {generatingWorkflow ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Process Team
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Canvas + Sidebar flex container */}
       <div className="flex flex-1 overflow-hidden rounded-lg border border-border bg-bg-primary">
@@ -740,63 +746,38 @@ function TeamDetailContent() {
         )}
       </div>
 
-      {/* Actions bar */}
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          onClick={handleAddAgent}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary"
-        >
-          <Plus className="h-4 w-4" />
-          Add Agent
-        </button>
-        <button
-          onClick={handleProcessTeam}
-          disabled={generatingWorkflow || hasApiKey === false || nodes.length === 0 || isDirty}
-          title={
-            hasApiKey === false
-              ? "Set API key in Settings"
-              : nodes.length === 0
-                ? "Add agents first"
-                : isDirty
-                  ? "Save changes first"
-                  : "Generate team workflow with AI"
-          }
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary"
-        >
-          {generatingWorkflow ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Process Team
-            </>
-          )}
-        </button>
-      </div>
-
       {/* Workflow section (collapsible) */}
       {(editedWorkflow || showWorkflow) && (
         <div className="mt-4 rounded-lg border border-border bg-bg-primary p-4">
-          <button
-            type="button"
-            onClick={() => setShowWorkflow(!showWorkflow)}
-            className="flex w-full items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
-          >
-            {showWorkflow ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowWorkflow(!showWorkflow)}
+              className="flex items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
+            >
+              {showWorkflow ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              View Workflow
+              {editedWorkflow && (
+                <span className="ml-1 text-xs text-text-secondary">
+                  ({editedWorkflow.split("\n").length} lines)
+                </span>
+              )}
+            </button>
+            {isDirty && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 font-body text-xs font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Save className="h-3 w-3" />
+                {saving ? "Saving..." : "Save"}
+              </button>
             )}
-            View Workflow
-            {editedWorkflow && (
-              <span className="ml-1 text-xs text-text-secondary">
-                ({editedWorkflow.split("\n").length} lines)
-              </span>
-            )}
-          </button>
+          </div>
           {showWorkflow && (
             <textarea
               value={editedWorkflow}
@@ -806,6 +787,39 @@ function TeamDetailContent() {
               placeholder="Team workflow will appear here after processing..."
             />
           )}
+        </div>
+      )}
+
+      {/* Sticky save bar: appears when there are unsaved changes */}
+      {(isDirty || saveMessage) && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-white px-6 py-3 shadow-lg">
+          <div className="mx-auto flex max-w-5xl items-center justify-between">
+            <div className="flex items-center gap-3">
+              {saveMessage ? (
+                <span
+                  className={`font-body text-sm font-medium ${
+                    saveMessage.type === "success" ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {saveMessage.text}
+                </span>
+              ) : (
+                <span className="font-body text-sm font-medium text-amber-600">
+                  ● Unsaved changes
+                </span>
+              )}
+            </div>
+            {isDirty && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-5 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
