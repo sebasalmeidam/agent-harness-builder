@@ -1,29 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cloneRepository } from "../services/git-service.js";
-
-vi.mock("../services/git-service.js", () => ({
-  cloneRepository: vi.fn().mockResolvedValue({ success: true }),
-}));
-
-const mockCloneRepository = vi.mocked(cloneRepository);
 
 let tempDir: string;
+let projectPath: string;
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "harness-test-"));
   process.env["HARNESS_DATA_DIR"] = tempDir;
-  mockCloneRepository.mockResolvedValue({ success: true });
+  // Create a valid project directory for testing
+  projectPath = join(tempDir, "test-project");
+  await mkdir(projectPath, { recursive: true });
 });
 
 afterEach(async () => {
   delete process.env["HARNESS_DATA_DIR"];
   await rm(tempDir, { recursive: true, force: true });
-  mockCloneRepository.mockClear();
 });
 
 describe("GET /api/projects", () => {
@@ -36,7 +31,7 @@ describe("GET /api/projects", () => {
   it("returns project summaries after creating projects", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "My Project", description: "A test project" });
+      .send({ name: "My Project", description: "A test project", path: projectPath });
 
     const res = await request(app).get("/api/projects");
     expect(res.status).toBe(200);
@@ -45,32 +40,32 @@ describe("GET /api/projects", () => {
     expect(res.body[0].name).toBe("My Project");
     expect(res.body[0].description).toBe("A test project");
     expect(res.body[0].emoji).toBe("\uD83D\uDCE6");
-    expect(res.body[0].teamId).toBeNull();
-    expect(res.body[0].runCount).toBe(0);
+    expect(res.body[0].path).toBe(projectPath);
+    expect(res.body[0].taskCount).toBe(0);
+    expect(res.body[0].pathExists).toBe(true);
     expect(res.body[0].createdAt).toBeDefined();
   });
 
-  it("returns correct runCount when .runs/ directory has json files", async () => {
+  it("returns pathExists as false when directory is deleted", async () => {
+    const deletedPath = join(tempDir, "deleted-project");
+    await mkdir(deletedPath, { recursive: true });
+
     await request(app)
       .post("/api/projects")
-      .send({ name: "Run Count Project", description: "Has runs" });
+      .send({ name: "Deleted Path Project", description: "Path will be deleted", path: deletedPath });
 
-    // Manually create .runs/ directory with some JSON files
-    const runsDir = join(tempDir, "projects", "run-count-project", ".runs");
-    await mkdir(runsDir, { recursive: true });
-    await writeFile(join(runsDir, "run-1.json"), "{}", "utf-8");
-    await writeFile(join(runsDir, "run-2.json"), "{}", "utf-8");
-    await writeFile(join(runsDir, "not-a-run.txt"), "ignored", "utf-8");
+    // Delete the directory
+    await rm(deletedPath, { recursive: true, force: true });
 
     const res = await request(app).get("/api/projects");
-    const project = res.body.find((p: { id: string }) => p.id === "run-count-project");
-    expect(project.runCount).toBe(2);
+    const project = res.body.find((p: { id: string }) => p.id === "deleted-path-project");
+    expect(project.pathExists).toBe(false);
   });
 
   it("returns emoji in project list summaries with custom emoji", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Emoji List", description: "Custom emoji", emoji: "\uD83D\uDE80" });
+      .send({ name: "Emoji List", description: "Custom emoji", emoji: "\uD83D\uDE80", path: projectPath });
 
     const res = await request(app).get("/api/projects");
     const project = res.body.find((p: { id: string }) => p.id === "emoji-list");
@@ -82,16 +77,14 @@ describe("POST /api/projects", () => {
   it("creates a project and returns 201 with the project object", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "Full Stack Project", description: "Builds full stack apps" });
+      .send({ name: "Full Stack Project", description: "Builds full stack apps", path: projectPath });
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe("full-stack-project");
     expect(res.body.name).toBe("Full Stack Project");
     expect(res.body.description).toBe("Builds full stack apps");
     expect(res.body.emoji).toBe("\uD83D\uDCE6");
-    expect(res.body.spec).toBe("");
-    expect(res.body.teamId).toBeNull();
-    expect(res.body.gitUrl).toBeNull();
+    expect(res.body.path).toBe(projectPath);
     expect(res.body.createdAt).toBeDefined();
     expect(res.body.updatedAt).toBeDefined();
   });
@@ -99,7 +92,7 @@ describe("POST /api/projects", () => {
   it("returns 400 when name is missing", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ description: "No name" });
+      .send({ description: "No name", path: projectPath });
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "Project name is required" });
@@ -108,20 +101,59 @@ describe("POST /api/projects", () => {
   it("returns 400 when name is empty string", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "   ", description: "Blank name" });
+      .send({ name: "   ", description: "Blank name", path: projectPath });
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "Project name is required" });
   });
 
-  it("returns 409 when creating a project with a duplicate name", async () => {
-    await request(app)
+  it("returns 400 when path is missing", async () => {
+    const res = await request(app)
       .post("/api/projects")
-      .send({ name: "Duplicate Project", description: "First" });
+      .send({ name: "No Path", description: "Missing path" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Project path is required" });
+  });
+
+  it("returns 400 when path is not absolute", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Relative Path", description: "Bad path", path: "relative/path" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Path must be an absolute path");
+  });
+
+  it("returns 400 when path does not exist", async () => {
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Nonexistent Path", description: "Bad path", path: "/nonexistent/directory" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Path does not exist");
+  });
+
+  it("returns 400 when path is a file not a directory", async () => {
+    const filePath = join(tempDir, "test-file.txt");
+    await writeFile(filePath, "content", "utf-8");
 
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "Duplicate Project", description: "Second" });
+      .send({ name: "File Path", description: "Path is a file", path: filePath });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Path must be a directory");
+  });
+
+  it("returns 409 when creating a project with a duplicate name", async () => {
+    await request(app)
+      .post("/api/projects")
+      .send({ name: "Duplicate Project", description: "First", path: projectPath });
+
+    const res = await request(app)
+      .post("/api/projects")
+      .send({ name: "Duplicate Project", description: "Second", path: projectPath });
 
     expect(res.status).toBe(409);
     expect(res.body).toEqual({
@@ -132,7 +164,7 @@ describe("POST /api/projects", () => {
   it("defaults description to empty string when not provided", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "No Desc" });
+      .send({ name: "No Desc", path: projectPath });
 
     expect(res.status).toBe(201);
     expect(res.body.description).toBe("");
@@ -141,7 +173,7 @@ describe("POST /api/projects", () => {
   it("persists emoji when provided", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "Emoji Project", description: "Has emoji", emoji: "\uD83D\uDE80" });
+      .send({ name: "Emoji Project", description: "Has emoji", emoji: "\uD83D\uDE80", path: projectPath });
 
     expect(res.status).toBe(201);
     expect(res.body.emoji).toBe("\uD83D\uDE80");
@@ -150,7 +182,7 @@ describe("POST /api/projects", () => {
   it("defaults emoji to package emoji when not provided", async () => {
     const res = await request(app)
       .post("/api/projects")
-      .send({ name: "Default Emoji", description: "No emoji field" });
+      .send({ name: "Default Emoji", description: "No emoji field", path: projectPath });
 
     expect(res.status).toBe(201);
     expect(res.body.emoji).toBe("\uD83D\uDCE6");
@@ -161,7 +193,7 @@ describe("GET /api/projects/:id", () => {
   it("returns the full project object for an existing project", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Detail Project", description: "For detail test" });
+      .send({ name: "Detail Project", description: "For detail test", path: projectPath });
 
     const res = await request(app).get("/api/projects/detail-project");
     expect(res.status).toBe(200);
@@ -169,9 +201,7 @@ describe("GET /api/projects/:id", () => {
     expect(res.body.name).toBe("Detail Project");
     expect(res.body.description).toBe("For detail test");
     expect(res.body.emoji).toBe("\uD83D\uDCE6");
-    expect(res.body.spec).toBe("");
-    expect(res.body.teamId).toBeNull();
-    expect(res.body.gitUrl).toBeNull();
+    expect(res.body.path).toBe(projectPath);
   });
 
   it("returns 404 for a nonexistent project", async () => {
@@ -182,38 +212,24 @@ describe("GET /api/projects/:id", () => {
 });
 
 describe("PUT /api/projects/:id", () => {
-  it("updates the spec field of an existing project", async () => {
+  it("updates the name field of an existing project", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Update Me", description: "Original" });
+      .send({ name: "Update Me", description: "Original", path: projectPath });
 
     const res = await request(app)
       .put("/api/projects/update-me")
-      .send({ spec: "Build a web application with React and Express" });
+      .send({ name: "Updated Name" });
 
     expect(res.status).toBe(200);
-    expect(res.body.spec).toBe("Build a web application with React and Express");
+    expect(res.body.name).toBe("Updated Name");
     expect(res.body.id).toBe("update-me");
-    expect(res.body.name).toBe("Update Me");
-  });
-
-  it("updates the teamId field of an existing project", async () => {
-    await request(app)
-      .post("/api/projects")
-      .send({ name: "Team Assign", description: "For team assignment" });
-
-    const res = await request(app)
-      .put("/api/projects/team-assign")
-      .send({ teamId: "my-team" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.teamId).toBe("my-team");
   });
 
   it("returns 404 when updating a nonexistent project", async () => {
     const res = await request(app)
       .put("/api/projects/nonexistent")
-      .send({ spec: "Something" });
+      .send({ name: "Something" });
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Project not found" });
@@ -222,11 +238,11 @@ describe("PUT /api/projects/:id", () => {
   it("preserves the original ID even if body contains different ID", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Id Test", description: "" });
+      .send({ name: "Id Test", description: "", path: projectPath });
 
     const res = await request(app)
       .put("/api/projects/id-test")
-      .send({ id: "different-id", spec: "New spec" });
+      .send({ id: "different-id", name: "New Name" });
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe("id-test");
@@ -235,13 +251,13 @@ describe("PUT /api/projects/:id", () => {
   it("does not change createdAt on update", async () => {
     const createRes = await request(app)
       .post("/api/projects")
-      .send({ name: "Timestamp Test", description: "" });
+      .send({ name: "Timestamp Test", description: "", path: projectPath });
 
     const originalCreatedAt = createRes.body.createdAt;
 
     const res = await request(app)
       .put("/api/projects/timestamp-test")
-      .send({ spec: "Updated spec" });
+      .send({ name: "Updated Name" });
 
     expect(res.status).toBe(200);
     expect(res.body.createdAt).toBe(originalCreatedAt);
@@ -252,7 +268,7 @@ describe("DELETE /api/projects/:id", () => {
   it("deletes an existing project and returns 204", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Delete Me", description: "To be deleted" });
+      .send({ name: "Delete Me", description: "To be deleted", path: projectPath });
 
     const res = await request(app).delete("/api/projects/delete-me");
     expect(res.status).toBe(204);
@@ -273,12 +289,7 @@ describe("PATCH /api/projects/:id", () => {
   it("updates only the name field and preserves other fields", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Patch Name", description: "Original description" });
-
-    // Set a teamId first so we can verify it is preserved
-    await request(app)
-      .put("/api/projects/patch-name")
-      .send({ teamId: "my-team", spec: "Original spec" });
+      .send({ name: "Patch Name", description: "Original description", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/patch-name")
@@ -287,30 +298,29 @@ describe("PATCH /api/projects/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Updated Name");
     expect(res.body.description).toBe("Original description");
-    expect(res.body.teamId).toBe("my-team");
-    expect(res.body.spec).toBe("Original spec");
+    expect(res.body.path).toBe(projectPath);
     expect(res.body.id).toBe("patch-name");
   });
 
-  it("updates only the teamId field and preserves other fields", async () => {
+  it("updates only the description field and preserves other fields", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Patch Team", description: "Team test" });
+      .send({ name: "Patch Desc", description: "Original", path: projectPath });
 
     const res = await request(app)
-      .patch("/api/projects/patch-team")
-      .send({ teamId: "new-team" });
+      .patch("/api/projects/patch-desc")
+      .send({ description: "Updated description" });
 
     expect(res.status).toBe(200);
-    expect(res.body.teamId).toBe("new-team");
-    expect(res.body.name).toBe("Patch Team");
-    expect(res.body.description).toBe("Team test");
+    expect(res.body.description).toBe("Updated description");
+    expect(res.body.name).toBe("Patch Desc");
+    expect(res.body.path).toBe(projectPath);
   });
 
   it("returns 400 when name is a number", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Type Check", description: "" });
+      .send({ name: "Type Check", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/type-check")
@@ -323,7 +333,7 @@ describe("PATCH /api/projects/:id", () => {
   it("returns 400 when description is a boolean", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Bool Check", description: "" });
+      .send({ name: "Bool Check", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/bool-check")
@@ -345,7 +355,7 @@ describe("PATCH /api/projects/:id", () => {
   it("returns 400 when body is empty object", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Empty Body", description: "" });
+      .send({ name: "Empty Body", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/empty-body")
@@ -358,7 +368,7 @@ describe("PATCH /api/projects/:id", () => {
   it("returns 400 when name is an empty string", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Empty Name", description: "" });
+      .send({ name: "Empty Name", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/empty-name")
@@ -371,7 +381,7 @@ describe("PATCH /api/projects/:id", () => {
   it("strips non-updatable fields like id and createdAt", async () => {
     const createRes = await request(app)
       .post("/api/projects")
-      .send({ name: "Strip Fields", description: "Original" });
+      .send({ name: "Strip Fields", description: "Original", path: projectPath });
 
     const originalCreatedAt = createRes.body.createdAt;
 
@@ -388,7 +398,7 @@ describe("PATCH /api/projects/:id", () => {
   it("updates the emoji field via PATCH", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Patch Emoji", description: "Emoji test" });
+      .send({ name: "Patch Emoji", description: "Emoji test", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/patch-emoji")
@@ -402,7 +412,7 @@ describe("PATCH /api/projects/:id", () => {
   it("returns 400 when emoji is not a string", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Emoji Type Check", description: "" });
+      .send({ name: "Emoji Type Check", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/emoji-type-check")
@@ -415,7 +425,7 @@ describe("PATCH /api/projects/:id", () => {
   it("ignores unknown fields and processes valid ones", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Unknown Fields", description: "Original" });
+      .send({ name: "Unknown Fields", description: "Original", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/unknown-fields")
@@ -428,7 +438,7 @@ describe("PATCH /api/projects/:id", () => {
   it("returns 400 when body only contains non-updatable fields", async () => {
     await request(app)
       .post("/api/projects")
-      .send({ name: "Only Non Updatable", description: "" });
+      .send({ name: "Only Non Updatable", description: "", path: projectPath });
 
     const res = await request(app)
       .patch("/api/projects/only-non-updatable")
@@ -439,61 +449,3 @@ describe("PATCH /api/projects/:id", () => {
   });
 });
 
-describe("POST /api/projects with gitUrl", () => {
-  it("stores the git URL when provided and clone succeeds", async () => {
-    mockCloneRepository.mockResolvedValue({ success: true });
-
-    const res = await request(app).post("/api/projects").send({
-      name: "Git Project",
-      description: "Has a repo",
-      gitUrl: "https://github.com/octocat/Hello-World.git",
-    });
-
-    expect(res.status).toBe(201);
-    expect(res.body.gitUrl).toBe(
-      "https://github.com/octocat/Hello-World.git",
-    );
-    expect(res.body.cloneWarning).toBeUndefined();
-    expect(mockCloneRepository).toHaveBeenCalledOnce();
-  });
-
-  it("creates project without gitUrl when not provided", async () => {
-    const res = await request(app)
-      .post("/api/projects")
-      .send({ name: "No Git", description: "No repo" });
-
-    expect(res.status).toBe(201);
-    expect(res.body.gitUrl).toBeNull();
-    expect(res.body.cloneWarning).toBeUndefined();
-    expect(mockCloneRepository).not.toHaveBeenCalled();
-  });
-
-  it("creates project but includes cloneWarning when clone fails", async () => {
-    mockCloneRepository.mockResolvedValue({
-      success: false,
-      error: "Repository not found",
-    });
-
-    const res = await request(app).post("/api/projects").send({
-      name: "Bad Git",
-      description: "Invalid repo",
-      gitUrl: "https://invalid.example.com/repo.git",
-    });
-
-    expect(res.status).toBe(201);
-    expect(res.body.gitUrl).toBe("https://invalid.example.com/repo.git");
-    expect(res.body.cloneWarning).toBe("Repository not found");
-    expect(mockCloneRepository).toHaveBeenCalledOnce();
-  });
-
-  it("ignores empty gitUrl string", async () => {
-    const res = await request(app)
-      .post("/api/projects")
-      .send({ name: "Empty Git", description: "Empty URL", gitUrl: "" });
-
-    expect(res.status).toBe(201);
-    expect(res.body.gitUrl).toBeNull();
-    expect(res.body.cloneWarning).toBeUndefined();
-    expect(mockCloneRepository).not.toHaveBeenCalled();
-  });
-});

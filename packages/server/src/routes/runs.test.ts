@@ -1,19 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as executionService from "../services/execution-service.js";
 import * as projectService from "../services/project-service.js";
 import * as teamService from "../services/team-service.js";
 
-// Mock git-service to prevent real clone attempts
-vi.mock("../services/git-service.js", () => ({
-  cloneRepository: vi.fn().mockResolvedValue({ success: true }),
-}));
-
 let tempDir: string;
+let projectPath: string;
 
 /**
  * Creates a project with a team assigned and a non-empty spec
@@ -77,6 +73,7 @@ async function setupProjectWithTeam(): Promise<void> {
   await projectService.create({
     name: "Test Project",
     description: "A test project",
+    path: projectPath,
   });
   await projectService.update("test-project", {
     teamId: "test-team",
@@ -88,6 +85,9 @@ beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "runs-test-"));
   process.env["HARNESS_DATA_DIR"] = tempDir;
   process.env["ANTHROPIC_API_KEY"] = "test-api-key-not-real";
+  // Create a valid project directory for testing
+  projectPath = join(tempDir, "test-project");
+  await mkdir(projectPath, { recursive: true });
   executionService._clearActiveRuns();
 });
 
@@ -123,6 +123,7 @@ describe("POST /api/projects/:id/runs", () => {
     await projectService.create({
       name: "No Team",
       description: "Has no team",
+      path: projectPath,
     });
 
     const res = await request(app).post("/api/projects/no-team/runs");
@@ -154,6 +155,7 @@ describe("POST /api/projects/:id/runs", () => {
     await projectService.create({
       name: "No Spec",
       description: "Has team but no spec",
+      path: projectPath,
     });
     await projectService.update("no-spec", {
       teamId: "some-team",
@@ -185,6 +187,7 @@ describe("GET /api/projects/:id/runs", () => {
     await projectService.create({
       name: "Empty Project",
       description: "No runs yet",
+      path: projectPath,
     });
 
     const res = await request(app).get("/api/projects/empty-project/runs");
@@ -249,6 +252,7 @@ describe("GET /api/projects/:id/runs/:runId", () => {
     await projectService.create({
       name: "Some Project",
       description: "For run lookup",
+      path: projectPath,
     });
 
     const res = await request(app).get(
@@ -297,6 +301,7 @@ describe("GET /api/projects/:id/runs/:runId/events (SSE)", () => {
     await projectService.create({
       name: "SSE Project",
       description: "For SSE test",
+      path: projectPath,
     });
 
     const res = await request(app).get(

@@ -1,12 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-// Mock git-service to prevent real clone attempts when project-service is used
-vi.mock("./git-service.js", () => ({
-  cloneRepository: vi.fn().mockResolvedValue({ success: true }),
-}));
 
 import * as executionService from "./execution-service.js";
 import * as runService from "./run-service.js";
@@ -14,6 +9,7 @@ import * as projectService from "./project-service.js";
 import * as teamService from "./team-service.js";
 
 let tempDir: string;
+let projectPath: string;
 
 /**
  * Creates a project with a team assigned and a non-empty spec
@@ -78,6 +74,7 @@ async function setupProjectWithTeam(): Promise<void> {
   await projectService.create({
     name: "Test Project",
     description: "A test project",
+    path: projectPath,
   });
   await projectService.update("test-project", {
     teamId: "test-team",
@@ -89,6 +86,9 @@ beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "execution-service-test-"));
   process.env["HARNESS_DATA_DIR"] = tempDir;
   process.env["ANTHROPIC_API_KEY"] = "test-api-key-not-real";
+  // Create a valid project directory for testing
+  projectPath = join(tempDir, "test-project");
+  await mkdir(projectPath, { recursive: true });
   executionService._clearActiveRuns();
 });
 
@@ -117,6 +117,7 @@ describe("startRun", () => {
     await projectService.create({
       name: "No Team Project",
       description: "Has no team",
+      path: projectPath,
     });
 
     await expect(
@@ -153,6 +154,7 @@ describe("startRun", () => {
     await projectService.create({
       name: "Empty Spec Project",
       description: "Has a team but no spec",
+      path: projectPath,
     });
     await projectService.update("empty-spec-project", {
       teamId: "some-team",

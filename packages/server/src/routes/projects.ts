@@ -16,10 +16,10 @@ router.get("/", async (_req, res) => {
 
 // POST /api/projects - Create a new project
 router.post("/", async (req, res) => {
-  const { name, description, gitUrl, emoji } = req.body as {
+  const { name, description, path, emoji } = req.body as {
     name?: string;
     description?: string;
-    gitUrl?: string;
+    path?: string;
     emoji?: string;
   };
 
@@ -28,20 +28,20 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  if (!path || typeof path !== "string" || path.trim().length === 0) {
+    res.status(400).json({ error: "Project path is required" });
+    return;
+  }
+
   try {
-    const { project, cloneResult } = await projectService.create({
+    const project = await projectService.create({
       name: name.trim(),
       description: typeof description === "string" ? description.trim() : "",
-      gitUrl: typeof gitUrl === "string" ? gitUrl : undefined,
+      path: path.trim(),
       emoji: typeof emoji === "string" ? emoji : undefined,
     });
 
-    const response: Record<string, unknown> = { ...project };
-    if (cloneResult && !cloneResult.success) {
-      response["cloneWarning"] = cloneResult.error ?? "Clone failed";
-    }
-
-    res.status(201).json(response);
+    res.status(201).json(project);
   } catch (err) {
     if (
       err instanceof Error &&
@@ -50,6 +50,13 @@ router.post("/", async (req, res) => {
       res
         .status(409)
         .json({ error: "A project with this name already exists" });
+      return;
+    }
+    if (
+      err instanceof Error &&
+      (err as Error & { code: string }).code === "INVALID_PATH"
+    ) {
+      res.status(400).json({ error: err.message });
       return;
     }
     console.error("Failed to create project:", err);
@@ -72,7 +79,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/projects/:id - Update a project (spec, teamId, etc.)
+// PUT /api/projects/:id - Update a project (name, description, emoji)
 router.put("/:id", async (req, res) => {
   const updates = req.body;
 
@@ -118,18 +125,6 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
-  if ("spec" in body) {
-    if (typeof body.spec !== "string") {
-      errors.push("spec must be a string");
-    }
-  }
-
-  if ("teamId" in body) {
-    if (body.teamId !== null && typeof body.teamId !== "string") {
-      errors.push("teamId must be a string or null");
-    }
-  }
-
   if ("emoji" in body) {
     if (typeof body.emoji !== "string") {
       errors.push("emoji must be a string");
@@ -142,7 +137,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   // Extract only allowed fields, strip non-updatable fields
-  const allowedFields = ["name", "description", "spec", "teamId", "emoji"] as const;
+  const allowedFields = ["name", "description", "emoji"] as const;
   const validUpdates: Record<string, unknown> = {};
 
   for (const field of allowedFields) {
@@ -152,7 +147,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   if (Object.keys(validUpdates).length === 0) {
-    res.status(400).json({ error: "Request body must contain at least one updatable field (name, description, spec, teamId, emoji)" });
+    res.status(400).json({ error: "Request body must contain at least one updatable field (name, description, emoji)" });
     return;
   }
 

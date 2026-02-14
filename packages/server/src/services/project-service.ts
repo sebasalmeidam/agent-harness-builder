@@ -1,10 +1,7 @@
-import { readdir, readFile, writeFile, rename, rm, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, readFile, writeFile, rename, rm, mkdir, stat } from "node:fs/promises";
+import { join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { slugify } from "./team-service.js";
-import { cloneRepository } from "./git-service.js";
-import type { CloneResult } from "./git-service.js";
-import { getRunsDir } from "./run-service.js";
 
 const DEFAULT_PROJECT_EMOJI = "\uD83D\uDCE6"; // package emoji 📦
 
@@ -15,11 +12,12 @@ export interface Project {
   name: string;
   description: string;
   emoji: string;
-  spec: string;
-  teamId: string | null;
-  gitUrl: string | null;
+  path: string;
   createdAt: string;
   updatedAt: string;
+  // Deprecated fields kept for backward compatibility (removed in ADR-021)
+  spec?: string;
+  teamId?: string | null;
 }
 
 export interface ProjectSummary {
@@ -27,9 +25,45 @@ export interface ProjectSummary {
   name: string;
   description: string;
   emoji: string;
-  teamId: string | null;
-  runCount: number;
+  path: string;
+  taskCount: number;
+  pathExists: boolean;
   createdAt: string;
+}
+
+// --- Path validation ---
+
+export async function validateProjectPath(
+  path: string
+): Promise<{ valid: boolean; error?: string }> {
+  // Check if path is absolute
+  if (!isAbsolute(path)) {
+    return {
+      valid: false,
+      error: "Path must be an absolute path",
+    };
+  }
+
+  // Check if path exists
+  let pathStat;
+  try {
+    pathStat = await stat(path);
+  } catch {
+    return {
+      valid: false,
+      error: "Path does not exist",
+    };
+  }
+
+  // Check if path is a directory
+  if (!pathStat.isDirectory()) {
+    return {
+      valid: false,
+      error: "Path must be a directory",
+    };
+  }
+
+  return { valid: true };
 }
 
 // --- Service ---
@@ -71,23 +105,31 @@ export async function list(): Promise<ProjectSummary[]> {
       const content = await readFile(filePath, "utf-8");
       const project = JSON.parse(content) as Record<string, unknown>;
 
-      // Count .json files in the .runs/ directory for this project
-      let runCount = 0;
-      try {
-        const runsDir = getRunsDir(entry);
-        const runFiles = await readdir(runsDir);
-        runCount = runFiles.filter((f) => f.endsWith(".json")).length;
-      } catch {
-        // .runs/ directory does not exist or is unreadable -- runCount stays 0
+      const projectPath = (project.path as string) || "";
+
+      // Check if path exists (NFR-3: graceful handling)
+      let pathExists = false;
+      if (projectPath) {
+        try {
+          await stat(projectPath);
+          pathExists = true;
+        } catch {
+          // Path does not exist or is not accessible
+          pathExists = false;
+        }
       }
+
+      // Task count defaults to 0 (will be implemented in ADR-019)
+      const taskCount = 0;
 
       summaries.push({
         id: project.id as string,
         name: project.name as string,
         description: project.description as string,
         emoji: (project.emoji as string) || DEFAULT_PROJECT_EMOJI,
-        teamId: project.teamId as string | null,
-        runCount,
+        path: projectPath,
+        taskCount,
+        pathExists,
         createdAt: project.createdAt as string,
       });
     } catch {
@@ -109,28 +151,35 @@ export async function get(id: string): Promise<Project | null> {
     if (!project.emoji) {
       project.emoji = DEFAULT_PROJECT_EMOJI;
     }
+    // Backward compatibility: default path to empty string if missing
+    if (!project.path) {
+      project.path = "";
+    }
     return project;
   } catch {
     return null;
   }
 }
 
-export interface CreateResult {
-  project: Project;
-  cloneResult?: CloneResult;
-}
-
 export async function create(input: {
   name: string;
   description: string;
-  gitUrl?: string;
+  path: string;
   emoji?: string;
-}): Promise<CreateResult> {
+}): Promise<Project> {
   const projectsDir = await ensureProjectsDir();
   const id = slugify(input.name);
 
   if (!id) {
     throw new Error("Invalid project name");
+  }
+
+  // Validate path
+  const validation = await validateProjectPath(input.path);
+  if (!validation.valid) {
+    const error = new Error(validation.error);
+    (error as Error & { code: string }).code = "INVALID_PATH";
+    throw error;
   }
 
   const projDir = projectDirPath(projectsDir, id);
@@ -155,8 +204,6 @@ export async function create(input: {
   // Create the project directory
   await mkdir(projDir, { recursive: true });
 
-  const gitUrl = input.gitUrl?.trim() || null;
-
   const emoji = input.emoji?.trim() || DEFAULT_PROJECT_EMOJI;
 
   const now = new Date().toISOString();
@@ -165,9 +212,7 @@ export async function create(input: {
     name: input.name,
     description: input.description,
     emoji,
-    spec: "",
-    teamId: null,
-    gitUrl,
+    path: input.path,
     createdAt: now,
     updatedAt: now,
   };
@@ -177,14 +222,7 @@ export async function create(input: {
   await writeFile(tmpPath, JSON.stringify(project, null, 2), "utf-8");
   await rename(tmpPath, filePath);
 
-  // Clone repository if gitUrl is provided
-  let cloneResultValue: CloneResult | undefined;
-  if (gitUrl) {
-    const workspacePath = join(projDir, "workspace");
-    cloneResultValue = await cloneRepository(gitUrl, workspacePath);
-  }
-
-  return { project, cloneResult: cloneResultValue };
+  return project;
 }
 
 export async function update(
@@ -211,6 +249,7 @@ export async function update(
     ...existing,
     ...updates,
     id, // Preserve original ID
+    path: existing.path, // Path is immutable after creation
     createdAt: existing.createdAt, // Never change createdAt
     updatedAt: new Date().toISOString(),
   };
