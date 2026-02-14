@@ -6,6 +6,7 @@ export interface AgentNodeData {
   role: string;
   goal: string;
   skills: string[];
+  skillIds: string[];
   practices: string[];
   [key: string]: unknown;
 }

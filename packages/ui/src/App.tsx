@@ -10,6 +10,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage';
 import DashboardPage from './pages/DashboardPage';
 import ExecutionPage from './pages/ExecutionPage';
 import LandingPage from './pages/LandingPage';
+import SkillsPage from './pages/SkillsPage';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="projects/new" element={<CreateProjectPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="projects/:id/runs/:runId" element={<ExecutionPage />} />
+          <Route path="skills" element={<SkillsPage />} />
         </Route>
       </Routes>
     </ErrorBoundary>

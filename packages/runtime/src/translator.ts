@@ -136,10 +136,18 @@ function buildAgentPrompt(
   sections.push(`# Role: ${agent.role}`);
   sections.push(`## Goal\n${agent.goal}`);
 
-  // Skills
+  // Resolved skill entities with instructions
+  if (agent.resolvedSkills && agent.resolvedSkills.length > 0) {
+    const skillSections = agent.resolvedSkills
+      .map((skill) => `### ${skill.name}\n${skill.instructions}`)
+      .join("\n\n");
+    sections.push(`## Skills\n${skillSections}`);
+  }
+
+  // Free-text skill tags
   if (agent.skills.length > 0) {
     const skillsList = agent.skills.map((s) => `- ${s}`).join("\n");
-    sections.push(`## Skills\n${skillsList}`);
+    sections.push(`## Tags\n${skillsList}`);
   }
 
   // Practices

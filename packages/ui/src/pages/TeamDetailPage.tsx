@@ -27,6 +27,7 @@ interface TeamAgent {
   role: string;
   goal: string;
   skills: string[];
+  skillIds: string[];
   practices: string[];
   position: { x: number; y: number };
 }
@@ -60,6 +61,7 @@ function agentsToNodes(agents: TeamAgent[]): Node[] {
       role: agent.role,
       goal: agent.goal,
       skills: agent.skills,
+      skillIds: agent.skillIds ?? [],
       practices: agent.practices,
     },
   }));
@@ -88,6 +90,7 @@ export function nodesToAgents(nodes: Node[]): TeamAgent[] {
     role: (node.data as AgentNodeData).role,
     goal: (node.data as AgentNodeData).goal,
     skills: (node.data as AgentNodeData).skills,
+    skillIds: (node.data as AgentNodeData).skillIds ?? [],
     practices: (node.data as AgentNodeData).practices,
     position: { x: node.position.x, y: node.position.y },
   }));
@@ -331,6 +334,7 @@ function TeamDetailContent() {
         role: "",
         goal: "",
         skills: [],
+        skillIds: [],
         practices: [],
       },
     };

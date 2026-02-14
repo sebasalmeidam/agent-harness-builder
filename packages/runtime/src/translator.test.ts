@@ -13,6 +13,7 @@ function makeAgent(overrides: Partial<HarnessAgent> = {}): HarnessAgent {
     role: "Software Developer",
     goal: "Write clean, tested code",
     skills: ["TypeScript", "Testing"],
+    skillIds: [],
     practices: ["Write tests first", "Keep functions small"],
     position: { x: 0, y: 0 },
     ...overrides,
@@ -151,7 +152,7 @@ describe("translateHarness", () => {
     expect(result.leadAgent.systemPrompt).toContain("Build a blog");
   });
 
-  it("includes role, goal, skills, and practices in agent system prompts", () => {
+  it("includes role, goal, tags, and practices in agent system prompts", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({
@@ -485,7 +486,7 @@ describe("translateHarness", () => {
     expect(leadPrompt).not.toContain("Lead (Tech Lead): Coordinate");
   });
 
-  it("handles agents with empty skills and practices", () => {
+  it("handles agents with empty tags and practices", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({
@@ -506,7 +507,7 @@ describe("translateHarness", () => {
     expect(result.leadAgent.systemPrompt).toContain("Worker");
     expect(result.leadAgent.systemPrompt).toContain("Do work");
     // Should not crash or include empty sections
-    expect(result.leadAgent.systemPrompt).not.toContain("## Skills\n\n");
+    expect(result.leadAgent.systemPrompt).not.toContain("## Tags\n\n");
     expect(result.leadAgent.systemPrompt).not.toContain("## Practices\n\n");
   });
 
@@ -587,5 +588,169 @@ describe("translateHarness", () => {
     expect(wf).toContain("QA reviews work from Developer");
     expect(wf).toContain("Developer escalates to Tech Lead");
     expect(wf).toContain("QA escalates to Tech Lead");
+  });
+
+  // --- Resolved Skills Tests ---
+
+  it("includes resolved skill instructions under Skills heading when resolvedSkills is present", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "a1",
+          name: "Developer",
+          role: "Backend Developer",
+          goal: "Build APIs",
+          skills: [],
+          resolvedSkills: [
+            {
+              name: "TypeScript Best Practices",
+              instructions: "Write type-safe code. Use interfaces for object shapes. Avoid any type.",
+            },
+            {
+              name: "Testing Guidelines",
+              instructions: "Write unit tests for all functions. Aim for 80% coverage. Test edge cases.",
+            },
+          ],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const prompt = result.leadAgent.systemPrompt;
+    expect(prompt).toContain("## Skills");
+    expect(prompt).toContain("### TypeScript Best Practices");
+    expect(prompt).toContain("Write type-safe code. Use interfaces for object shapes. Avoid any type.");
+    expect(prompt).toContain("### Testing Guidelines");
+    expect(prompt).toContain("Write unit tests for all functions. Aim for 80% coverage. Test edge cases.");
+  });
+
+  it("does not include Skills section when resolvedSkills is absent", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "a1",
+          name: "Developer",
+          role: "Backend Developer",
+          goal: "Build APIs",
+          skills: [],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const prompt = result.leadAgent.systemPrompt;
+    expect(prompt).not.toContain("## Skills");
+  });
+
+  it("does not include Skills section when resolvedSkills is empty array", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "a1",
+          name: "Developer",
+          role: "Backend Developer",
+          goal: "Build APIs",
+          skills: [],
+          resolvedSkills: [],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const prompt = result.leadAgent.systemPrompt;
+    expect(prompt).not.toContain("## Skills");
+  });
+
+  it("includes Tags section when free-text tags are present", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "a1",
+          name: "Developer",
+          role: "Backend Developer",
+          goal: "Build APIs",
+          skills: ["TypeScript", "Node.js", "Express"],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const prompt = result.leadAgent.systemPrompt;
+    expect(prompt).toContain("## Tags");
+    expect(prompt).toContain("- TypeScript");
+    expect(prompt).toContain("- Node.js");
+    expect(prompt).toContain("- Express");
+  });
+
+  it("includes both Skills and Tags sections when both resolvedSkills and free-text tags are present", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "a1",
+          name: "Developer",
+          role: "Backend Developer",
+          goal: "Build APIs",
+          skills: ["TypeScript", "Node.js"],
+          resolvedSkills: [
+            {
+              name: "API Design",
+              instructions: "Follow REST principles. Use proper HTTP status codes.",
+            },
+          ],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build feature");
+
+    const prompt = result.leadAgent.systemPrompt;
+    expect(prompt).toContain("## Skills");
+    expect(prompt).toContain("### API Design");
+    expect(prompt).toContain("Follow REST principles. Use proper HTTP status codes.");
+    expect(prompt).toContain("## Tags");
+    expect(prompt).toContain("- TypeScript");
+    expect(prompt).toContain("- Node.js");
+  });
+
+  it("includes resolved skills in teammate prompts", () => {
+    const harness = makeHarness({
+      agents: [
+        makeAgent({
+          id: "lead",
+          name: "Lead",
+          role: "Tech Lead",
+          goal: "Coordinate",
+        }),
+        makeAgent({
+          id: "dev",
+          name: "Developer",
+          role: "Backend Dev",
+          goal: "Build APIs",
+          resolvedSkills: [
+            {
+              name: "Code Style",
+              instructions: "Use 2-space indentation. Max line length 100 chars.",
+            },
+          ],
+        }),
+      ],
+      edges: [],
+    });
+
+    const result = translateHarness(harness, "Build project");
+
+    const devPrompt = result.teammates[0].systemPrompt;
+    expect(devPrompt).toContain("## Skills");
+    expect(devPrompt).toContain("### Code Style");
+    expect(devPrompt).toContain("Use 2-space indentation. Max line length 100 chars.");
   });
 });
