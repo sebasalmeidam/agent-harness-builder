@@ -1,12 +1,14 @@
 import type { HarnessData, HarnessAgent, HarnessEdge } from "@agent-harness/runtime";
 import * as teamService from "./team-service.js";
 import type { Agent, Edge, Team } from "./team-service.js";
+import * as skillService from "./skill-service.js";
 
 /**
  * Export a team as a portable harness JSON.
  *
  * Reads the team by ID, validates it has at least one agent,
  * and maps the team data into the versioned HarnessData format.
+ * Resolves skill IDs to full skill data for each agent.
  *
  * @throws Error with code "NOT_FOUND" if team does not exist
  * @throws Error with code "NO_AGENTS" if team has zero agents
@@ -26,7 +28,36 @@ export async function exportHarness(teamId: string): Promise<HarnessData> {
     throw error;
   }
 
-  const agents: HarnessAgent[] = team.agents.map(mapAgent);
+  // Collect all unique skill IDs from all agents
+  const allSkillIds = new Set<string>();
+  for (const agent of team.agents) {
+    if (agent.skillIds) {
+      agent.skillIds.forEach((id) => allSkillIds.add(id));
+    }
+  }
+
+  // Resolve all skills in one batch
+  const skillsArray = await skillService.getMany(Array.from(allSkillIds));
+  const skillsMap = new Map(skillsArray.map((skill) => [skill.id, skill]));
+
+  // Map agents with resolved skills
+  const agents: HarnessAgent[] = team.agents.map((agent) => {
+    const harnessAgent = mapAgent(agent);
+
+    // Resolve skills for this agent
+    if (agent.skillIds && agent.skillIds.length > 0) {
+      harnessAgent.resolvedSkills = agent.skillIds
+        .map((id) => skillsMap.get(id))
+        .filter((skill): skill is NonNullable<typeof skill> => skill !== undefined)
+        .map((skill) => ({
+          name: skill.name,
+          instructions: skill.instructions,
+        }));
+    }
+
+    return harnessAgent;
+  });
+
   const edges: HarnessEdge[] = team.edges.map(mapEdge);
 
   return {

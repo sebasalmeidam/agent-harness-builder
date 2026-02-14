@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as teamService from "./team-service.js";
 import * as harnessService from "./harness-service.js";
+import * as skillService from "./skill-service.js";
 
 describe("harness-service", () => {
   let testDir: string;
@@ -12,6 +13,7 @@ describe("harness-service", () => {
     testDir = join(tmpdir(), `test-harness-${Date.now()}`);
     process.env["HARNESS_DATA_DIR"] = testDir;
     await mkdir(join(testDir, "teams"), { recursive: true });
+    await mkdir(join(testDir, "skills"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -158,6 +160,151 @@ describe("harness-service", () => {
       expect(importedTeam.agents[0].skillIds).toEqual([
         "non-existent-skill-1",
         "non-existent-skill-2",
+      ]);
+    });
+  });
+
+  describe("resolved skills in export", () => {
+    it("should resolve skill entities and attach instructions to harness agents on export", async () => {
+      // Create skills
+      const skill1 = await skillService.create({
+        name: "TypeScript Best Practices",
+        description: "TS guidelines",
+        instructions: "Write type-safe code. Use interfaces for object shapes.",
+      });
+      const skill2 = await skillService.create({
+        name: "Testing Guidelines",
+        description: "Test guidelines",
+        instructions: "Write unit tests for all functions. Aim for 80% coverage.",
+      });
+
+      // Create team with agents that reference these skills
+      const team = await teamService.create({
+        name: "Team With Skills",
+        description: "Test team",
+      });
+
+      await teamService.update(team.id, {
+        ...team,
+        agents: [
+          {
+            id: "agent-1",
+            name: "Developer",
+            emoji: "💻",
+            role: "Backend Developer",
+            goal: "Build APIs",
+            skills: ["TypeScript", "Node.js"],
+            skillIds: [skill1.id, skill2.id],
+            practices: ["TDD"],
+            position: { x: 100, y: 100 },
+          },
+          {
+            id: "agent-2",
+            name: "Reviewer",
+            emoji: "🔍",
+            role: "Code Reviewer",
+            goal: "Review code",
+            skills: [],
+            skillIds: [skill2.id],
+            practices: [],
+            position: { x: 300, y: 100 },
+          },
+        ],
+      });
+
+      // Export harness
+      const harness = await harnessService.exportHarness(team.id);
+
+      // Verify resolvedSkills are attached
+      expect(harness.agents[0].resolvedSkills).toHaveLength(2);
+      expect(harness.agents[0].resolvedSkills).toEqual([
+        {
+          name: "TypeScript Best Practices",
+          instructions: "Write type-safe code. Use interfaces for object shapes.",
+        },
+        {
+          name: "Testing Guidelines",
+          instructions: "Write unit tests for all functions. Aim for 80% coverage.",
+        },
+      ]);
+
+      expect(harness.agents[1].resolvedSkills).toHaveLength(1);
+      expect(harness.agents[1].resolvedSkills).toEqual([
+        {
+          name: "Testing Guidelines",
+          instructions: "Write unit tests for all functions. Aim for 80% coverage.",
+        },
+      ]);
+    });
+
+    it("should export agents with no skillIds without resolvedSkills field", async () => {
+      const team = await teamService.create({
+        name: "Simple Team",
+        description: "Test",
+      });
+
+      await teamService.update(team.id, {
+        ...team,
+        agents: [
+          {
+            id: "agent-1",
+            name: "Agent",
+            emoji: "🤖",
+            role: "Role",
+            goal: "Goal",
+            skills: ["tag1", "tag2"],
+            skillIds: [],
+            practices: [],
+            position: { x: 0, y: 0 },
+          },
+        ],
+      });
+
+      const harness = await harnessService.exportHarness(team.id);
+
+      // Agent has no skillIds, so no resolvedSkills should be present
+      expect(harness.agents[0].resolvedSkills).toBeUndefined();
+    });
+
+    it("should skip orphan skillIds when resolving (non-existent skills)", async () => {
+      // Create one real skill
+      const skill1 = await skillService.create({
+        name: "Real Skill",
+        description: "Exists",
+        instructions: "Do something real.",
+      });
+
+      const team = await teamService.create({
+        name: "Team With Orphans",
+        description: "Test",
+      });
+
+      await teamService.update(team.id, {
+        ...team,
+        agents: [
+          {
+            id: "agent-1",
+            name: "Agent",
+            emoji: "🤖",
+            role: "Role",
+            goal: "Goal",
+            skills: [],
+            skillIds: [skill1.id, "non-existent-skill-id"],
+            practices: [],
+            position: { x: 0, y: 0 },
+          },
+        ],
+      });
+
+      const harness = await harnessService.exportHarness(team.id);
+
+      // Only the real skill should be resolved
+      expect(harness.agents[0].resolvedSkills).toHaveLength(1);
+      expect(harness.agents[0].resolvedSkills).toEqual([
+        {
+          name: "Real Skill",
+          instructions: "Do something real.",
+        },
       ]);
     });
   });
