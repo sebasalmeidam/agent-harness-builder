@@ -14,7 +14,7 @@ No prompt engineering required. Just describe what each agent does, connect them
 git clone https://github.com/sebasalmeidam/agent-harness-builder.git
 cd agent-harness-builder
 ./setup.sh    # checks deps, installs, builds
-pnpm dev      # starts UI on :4173 and API on :4099
+pnpm start    # starts UI on :4173 and API on :4099
 ```
 
 Open [http://localhost:4173](http://localhost:4173) in your browser.
@@ -92,8 +92,8 @@ The config file is created automatically with `chmod 600` (owner-only access).
 ## 🧪 Development
 
 ```bash
-# Run in development (hot reload)
-pnpm dev
+# Run (hot reload)
+pnpm start
 
 # Build all packages
 pnpm build

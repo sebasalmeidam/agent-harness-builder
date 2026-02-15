@@ -228,7 +228,7 @@ export default function LandingPage() {
               {"\n"}git clone https://github.com/sebasalmeidam/agent-harness-builder.git{"\n"}cd agent-harness-builder{"\n"}./setup.sh
               {"\n\n"}
               <span className="text-gray-500"># Start the app</span>
-              {"\n"}pnpm dev
+              {"\n"}pnpm start
             </pre>
           </div>
           <p className="mt-4 text-center font-body text-sm text-text-muted">
