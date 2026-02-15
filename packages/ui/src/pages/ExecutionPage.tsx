@@ -121,6 +121,7 @@ export default function ExecutionPage() {
   // Running duration counter
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startedAtRef = useRef<string | null>(null);
 
   // Fetch task checklist
   const fetchTaskChecklist = useCallback(async (taskIdToFetch: string) => {
@@ -157,6 +158,11 @@ export default function ExecutionPage() {
           costUsd: data.costUsd,
           taskId: data.taskId,
         });
+        
+        // Store startedAt for elapsed timer
+        if (data.startedAt) {
+          startedAtRef.current = data.startedAt;
+        }
         
         // Fetch task checklist if taskId exists
         if (data.taskId) {
@@ -263,12 +269,16 @@ export default function ExecutionPage() {
   // Running duration timer
   useEffect(() => {
     if (activeState.status === "running") {
-      // Calculate initial elapsed from startedAt if available
-      if (historyData?.summary?.totalTime) {
-        setElapsed(historyData.summary.totalTime);
-      }
+      // Calculate elapsed from startedAt
+      const calcElapsed = () => {
+        if (startedAtRef.current) {
+          return Math.round((Date.now() - new Date(startedAtRef.current).getTime()) / 1000);
+        }
+        return 0;
+      };
+      setElapsed(calcElapsed());
       timerRef.current = setInterval(() => {
-        setElapsed((prev) => prev + 1);
+        setElapsed(calcElapsed());
       }, 1000);
     } else {
       if (timerRef.current) {
@@ -286,7 +296,7 @@ export default function ExecutionPage() {
         clearInterval(timerRef.current);
       }
     };
-  }, [activeState.status, activeState.summary?.totalTime, historyData?.summary?.totalTime]);
+  }, [activeState.status, activeState.summary?.totalTime]);
 
   // Refresh checklist when activity log updates (agent may have completed items)
   useEffect(() => {
