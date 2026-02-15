@@ -713,8 +713,8 @@ function TeamDetailContent() {
         </button>
       </div>
 
-      {/* Canvas + Sidebar flex container (drag bottom edge to resize) */}
-      <div className="flex min-h-[300px] flex-1 resize-y overflow-hidden rounded-lg border border-border bg-bg-primary">
+      {/* Canvas + Sidebar flex container (drag bottom-right corner to resize) */}
+      <div className="flex h-[500px] min-h-[300px] max-h-[80vh] resize-y overflow-hidden rounded-lg border border-border bg-bg-primary">
         {/* Canvas grows to fill available space */}
         <div className="min-w-0 flex-1">
           <TeamCanvas
