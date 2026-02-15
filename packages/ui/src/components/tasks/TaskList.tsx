@@ -57,7 +57,10 @@ export default function TaskList({
   const [taskRuns, setTaskRuns] = useState<Record<string, RunSummary[]>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [showDone, setShowDone] = useState(true);
+  const [showDone, setShowDone] = useState(() => {
+    const stored = localStorage.getItem('tasks-show-done');
+    return stored !== null ? stored === 'true' : true;
+  });
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragRef = useRef<string | null>(null);
@@ -392,7 +395,7 @@ export default function TaskList({
           )}
           {doneCount > 0 && (
             <button
-              onClick={() => setShowDone((prev) => !prev)}
+              onClick={() => setShowDone((prev) => { const next = !prev; localStorage.setItem('tasks-show-done', String(next)); return next; })}
               className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-text-secondary transition-colors hover:border-primary hover:text-primary"
               title={showDone ? "Hide completed tasks" : "Show completed tasks"}
               data-testid="toggle-done-button"
