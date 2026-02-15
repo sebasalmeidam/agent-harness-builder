@@ -421,7 +421,7 @@ export default function ProjectDetailPage() {
             <TaskList
               key={taskListKey}
               projectId={project.id}
-              onTaskSelect={setSelectedTaskId}
+              onTaskSelect={(id) => setSelectedTaskId(prev => prev === id ? null : id)}
               selectedTaskId={selectedTaskId}
               onTaskCountChange={handleTaskCountChange}
             />
@@ -438,6 +438,7 @@ export default function ProjectDetailPage() {
               taskId={selectedTaskId}
               projectId={project.id}
               onUpdate={handleTaskUpdate}
+              onClose={() => setSelectedTaskId(null)}
             />
           </div>
         )}

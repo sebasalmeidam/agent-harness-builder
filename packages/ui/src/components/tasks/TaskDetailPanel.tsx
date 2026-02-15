@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, ChevronDown, ChevronRight, Clock, DollarSign, ExternalLink } from "lucide-react";
+import { Play, ChevronDown, ChevronRight, Clock, DollarSign, ExternalLink, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import ChecklistEditor, { ChecklistItem } from "./ChecklistEditor";
 import TeamSelector from "./TeamSelector";
@@ -31,6 +31,7 @@ interface TaskDetailPanelProps {
   taskId: string;
   projectId: string;
   onUpdate?: () => void;
+  onClose?: () => void;
 }
 
 /**
@@ -66,6 +67,7 @@ export default function TaskDetailPanel({
   taskId,
   projectId,
   onUpdate,
+  onClose,
 }: TaskDetailPanelProps) {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -425,6 +427,18 @@ export default function TaskDetailPanel({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-bg-primary p-6">
+        {/* Close button */}
+        {onClose && (
+          <div className="mb-3 flex justify-end">
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
+              title="Close panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         {/* Title */}
         <div className="mb-4">
           <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
