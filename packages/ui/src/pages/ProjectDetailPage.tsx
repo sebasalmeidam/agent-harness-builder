@@ -5,6 +5,7 @@ import TaskList from "../components/tasks/TaskList";
 import TaskDetailPanel from "../components/tasks/TaskDetailPanel";
 import InitializeButton from "../components/tasks/InitializeButton";
 import SuggestionDraftList from "../components/tasks/SuggestionDraftList";
+import AttachmentList from "../components/attachments/AttachmentList";
 
 interface TaskSuggestion {
   title: string;
@@ -391,6 +392,11 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Tasks section */}
+      {/* Attachments */}
+      <div className="mb-6">
+        <AttachmentList projectId={project.id} />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Task List */}
         <div className="rounded-lg border border-border bg-bg-primary p-6">

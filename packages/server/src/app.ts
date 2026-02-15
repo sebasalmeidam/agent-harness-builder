@@ -7,6 +7,7 @@ import { skillsRouter } from "./routes/skills.js";
 import { initializeRouter } from "./routes/initialize.js";
 import { settingsRouter } from "./routes/settings.js";
 import { generateRouter } from "./routes/generate.js";
+import { attachmentsRouter } from "./routes/attachments.js";
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.use("/api/projects/:id/initialize", initializeRouter);
 app.use("/api/skills", skillsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/generate", generateRouter);
+app.use("/api/projects/:id/attachments", attachmentsRouter);
 
 export { app };

@@ -239,6 +239,19 @@ export async function startTaskRun(
   const harness = await exportHarness(task.teamId);
 
   // Compose rich execution prompt with project context, team process, and task
+  // Inject attachments list into project for prompt composition
+  if (project.path) {
+    try {
+      const { readdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const attachDir = join(project.path, "attachments");
+      const files = await readdir(attachDir).catch(() => [] as string[]);
+      if (files.length > 0) {
+        (project as typeof project & { _attachments?: string[] })._attachments = files;
+      }
+    } catch { /* no attachments */ }
+  }
+
   const executionPrompt = composeExecutionPrompt(project, task, team);
 
   // Translate harness with execution prompt

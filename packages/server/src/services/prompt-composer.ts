@@ -58,6 +58,19 @@ export function composeExecutionPrompt(
     lines.push("");
   }
 
+  // Attachments section (populated at runtime if files exist)
+  // This is a placeholder; the actual file list is injected by execution-service
+  if ((project as Project & { _attachments?: string[] })._attachments?.length) {
+    const attachments = (project as Project & { _attachments?: string[] })._attachments!;
+    lines.push("# Reference Files");
+    lines.push("The following files are available in the ./attachments/ directory:");
+    for (const file of attachments) {
+      lines.push(`- ${file}`);
+    }
+    lines.push("Use these files as input/reference for the task if relevant.");
+    lines.push("");
+  }
+
   // Instructions section
   lines.push("# Instructions");
   lines.push("Complete the unchecked items in the checklist above.");
