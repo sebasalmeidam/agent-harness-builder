@@ -127,7 +127,7 @@ describe("executeWithSdk", () => {
   it("returns an async generator", () => {
     const result = executeWithSdk({
       systemPrompt: "You are a test agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Test prompt",
       tools: ["Read", "Write"],
@@ -142,7 +142,7 @@ describe("executeWithSdk", () => {
   it("calls query with correct parameters", () => {
     executeWithSdk({
       systemPrompt: "You are a test agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Test prompt",
       tools: ["Read", "Write"],
@@ -152,7 +152,7 @@ describe("executeWithSdk", () => {
       prompt: "Test prompt",
       options: {
         systemPrompt: "You are a test agent",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         cwd: "/tmp/test",
         permissionMode: "bypassPermissions",
         tools: ["Read", "Write"],
@@ -166,7 +166,7 @@ describe("executeWithSdk", () => {
   it("passes custom maxBudgetUsd to query", () => {
     executeWithSdk({
       systemPrompt: "You are a test agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Test prompt",
       tools: ["Read"],
@@ -185,7 +185,7 @@ describe("executeWithSdk", () => {
   it("uses default maxBudgetUsd of 5.0 when not provided", () => {
     executeWithSdk({
       systemPrompt: "You are a test agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Test prompt",
       tools: ["Read"],
@@ -204,7 +204,7 @@ describe("executeWithSdk", () => {
     const tools = ["Read", "Glob", "Grep"];
     executeWithSdk({
       systemPrompt: "Test",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp",
       prompt: "Test",
       tools,
@@ -226,7 +226,7 @@ describe("executeWithSdk", () => {
 
     executeWithSdk({
       systemPrompt: "You are a lead agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Coordinate team",
       tools: ["Read", "Write", "Task"],
@@ -245,7 +245,7 @@ describe("executeWithSdk", () => {
   it("does not include agents option when not provided", () => {
     executeWithSdk({
       systemPrompt: "You are a solo agent",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       cwd: "/tmp/test",
       prompt: "Work alone",
       tools: ["Read", "Write"],
