@@ -525,6 +525,19 @@ function TeamDetailContent() {
   const handleProcessTeam = useCallback(async () => {
     if (!team) return;
 
+    // Confirm if there's existing workflow content
+    if (editedWorkflow.trim()) {
+      const confirmed = window.confirm(
+        "This will replace the current workflow with an AI-generated one. Continue?"
+      );
+      if (!confirmed) return;
+    }
+
+    // Auto-save agents/edges first if dirty
+    if (isDirty) {
+      await handleSave();
+    }
+
     setGeneratingWorkflow(true);
     setSaveMessage(null);
 
@@ -553,7 +566,7 @@ function TeamDetailContent() {
     } finally {
       setGeneratingWorkflow(false);
     }
-  }, [team, markDirty]);
+  }, [team, isDirty, editedWorkflow, handleSave, markDirty]);
 
   const handleWorkflowChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -683,15 +696,13 @@ function TeamDetailContent() {
         </button>
         <button
           onClick={handleProcessTeam}
-          disabled={generatingWorkflow || hasApiKey === false || nodes.length === 0 || isDirty}
+          disabled={generatingWorkflow || hasApiKey === false || nodes.length === 0}
           title={
             hasApiKey === false
               ? "Set API key in Settings"
               : nodes.length === 0
                 ? "Add agents first"
-                : isDirty
-                  ? "Save changes first"
-                  : "Generate team workflow with AI"
+                : "Generate team workflow with AI"
           }
           className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             editedWorkflow
