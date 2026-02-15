@@ -128,6 +128,25 @@ router.put("/:taskId", async (req, res) => {
   }
 });
 
+// PATCH /api/projects/:id/tasks/reorder - Reorder tasks
+router.patch("/reorder", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+
+    const { taskIds } = req.body as { taskIds?: string[] };
+    if (!Array.isArray(taskIds)) {
+      res.status(400).json({ error: "taskIds array is required" });
+      return;
+    }
+
+    const tasks = await taskService.reorder(projectId, taskIds);
+    res.json(tasks);
+  } catch (err) {
+    console.error("Failed to reorder tasks:", err);
+    res.status(500).json({ error: "Failed to reorder tasks" });
+  }
+});
+
 // DELETE /api/projects/:id/tasks/:taskId - Delete a task
 router.delete("/:taskId", async (req, res) => {
   try {

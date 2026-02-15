@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2, Clock, ExternalLink } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Plus, Trash2, Clock, ExternalLink, Eye, EyeOff, GripVertical } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface ChecklistItem {
@@ -57,6 +57,10 @@ export default function TaskList({
   const [taskRuns, setTaskRuns] = useState<Record<string, RunSummary[]>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [showDone, setShowDone] = useState(true);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragRef = useRef<string | null>(null);
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
@@ -231,6 +235,61 @@ export default function TaskList({
     }
   }
 
+  // Drag & drop handlers
+  function handleDragStart(taskId: string) {
+    dragRef.current = taskId;
+    setDragId(taskId);
+  }
+
+  function handleDragOver(e: React.DragEvent, taskId: string) {
+    e.preventDefault();
+    setDragOverId(taskId);
+  }
+
+  function handleDragEnd() {
+    setDragId(null);
+    setDragOverId(null);
+    dragRef.current = null;
+  }
+
+  async function handleDrop(targetId: string) {
+    const sourceId = dragRef.current;
+    if (!sourceId || sourceId === targetId) {
+      handleDragEnd();
+      return;
+    }
+
+    // Reorder locally first for instant feedback
+    const sourceIndex = tasks.findIndex((t) => t.id === sourceId);
+    const targetIndex = tasks.findIndex((t) => t.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) {
+      handleDragEnd();
+      return;
+    }
+
+    const reordered = [...tasks];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setTasks(reordered);
+    handleDragEnd();
+
+    // Persist to backend
+    try {
+      await fetch(`/api/projects/${projectId}/tasks/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskIds: reordered.map((t) => t.id) }),
+      });
+    } catch {
+      // Revert on failure
+      fetchTasks();
+    }
+  }
+
+  // Filter tasks
+  const visibleTasks = showDone ? tasks : tasks.filter((t) => t.status !== "done");
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+
   if (loading) {
     return (
       <p className="font-body text-sm text-text-secondary">Loading tasks...</p>
@@ -247,16 +306,29 @@ export default function TaskList({
 
   return (
     <div>
-      {/* Add Task Button */}
+      {/* Toolbar: Add Task + Toggle Done */}
       {!showAddForm && (
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="mb-4 inline-flex items-center gap-2 rounded-md border border-border bg-bg-primary px-4 py-2 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary"
-          data-testid="add-task-button"
-        >
-          <Plus className="h-4 w-4" />
-          Add Task
-        </button>
+        <div className="mb-4 flex items-center gap-2">
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-primary px-4 py-2 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary"
+            data-testid="add-task-button"
+          >
+            <Plus className="h-4 w-4" />
+            Add Task
+          </button>
+          {doneCount > 0 && (
+            <button
+              onClick={() => setShowDone((prev) => !prev)}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm text-text-secondary transition-colors hover:border-primary hover:text-primary"
+              title={showDone ? "Hide completed tasks" : "Show completed tasks"}
+              data-testid="toggle-done-button"
+            >
+              {showDone ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showDone ? "Hide done" : `Show done (${doneCount})`}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Add Task Form */}
@@ -311,20 +383,45 @@ export default function TaskList({
         </p>
       )}
 
+      {/* All filtered out */}
+      {tasks.length > 0 && visibleTasks.length === 0 && (
+        <p className="font-body text-sm text-text-secondary">
+          All tasks are done.{" "}
+          <button onClick={() => setShowDone(true)} className="text-primary underline">
+            Show them
+          </button>
+        </p>
+      )}
+
       {/* Task List */}
-      {tasks.length > 0 && (
+      {visibleTasks.length > 0 && (
         <div className="space-y-2" data-testid="task-list">
-          {tasks.map((task) => (
+          {visibleTasks.map((task) => (
             <div
               key={task.id}
+              draggable
+              onDragStart={() => handleDragStart(task.id)}
+              onDragOver={(e) => handleDragOver(e, task.id)}
+              onDragEnd={handleDragEnd}
+              onDrop={() => handleDrop(task.id)}
               className={`group relative flex items-center justify-between rounded-lg border p-4 transition-colors ${
-                selectedTaskId === task.id
-                  ? "border-primary bg-primary-light"
-                  : "border-border bg-bg-primary hover:border-primary/50"
+                dragId === task.id
+                  ? "opacity-50"
+                  : dragOverId === task.id
+                    ? "border-primary border-dashed"
+                    : selectedTaskId === task.id
+                      ? "border-primary bg-primary-light"
+                      : "border-border bg-bg-primary hover:border-primary/50"
               }`}
               onClick={() => onTaskSelect?.(task.id)}
               data-testid={`task-item-${task.id}`}
             >
+              <div
+                className="mr-3 cursor-grab text-text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="h-4 w-4" />
+              </div>
               <div className="flex-1">
                 <h3 className="mb-1 font-body text-base font-medium text-black">
                   {task.title}

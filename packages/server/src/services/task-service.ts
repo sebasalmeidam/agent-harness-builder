@@ -137,6 +137,31 @@ export async function remove(
   return true;
 }
 
+export async function reorder(
+  projectId: string,
+  taskIds: string[]
+): Promise<Task[]> {
+  const tasks = await readTasks(projectId);
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+  // Build reordered list: specified IDs first, then any remaining
+  const reordered: Task[] = [];
+  for (const id of taskIds) {
+    const task = taskMap.get(id);
+    if (task) {
+      reordered.push(task);
+      taskMap.delete(id);
+    }
+  }
+  // Append any tasks not in the provided list (safety)
+  for (const task of taskMap.values()) {
+    reordered.push(task);
+  }
+
+  await writeTasks(projectId, reordered);
+  return reordered;
+}
+
 export async function count(projectId: string): Promise<number> {
   const tasks = await readTasks(projectId);
   return tasks.length;
