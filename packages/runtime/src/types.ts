@@ -67,6 +67,7 @@ export interface ExecutionRun {
   summary: ExecutionSummary | null;
   error: string | null;
   costUsd?: number | null;
+  resultSummary?: string | null;
 }
 
 /**

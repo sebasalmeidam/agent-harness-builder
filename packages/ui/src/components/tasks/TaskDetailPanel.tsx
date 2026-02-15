@@ -85,6 +85,9 @@ export default function TaskDetailPanel({
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
 
+  // Result summary for completed tasks
+  const [resultSummary, setResultSummary] = useState<string | null>(null);
+
   // Team agents and status for live display
   const [teamAgents, setTeamAgents] = useState<AgentInfo[]>([]);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
@@ -152,6 +155,33 @@ export default function TaskDetailPanel({
 
     fetchRuns();
   }, [taskId, projectId]);
+
+  // Fetch result summary from latest completed run
+  useEffect(() => {
+    if (!task || task.status !== "done" || runs.length === 0) {
+      setResultSummary(null);
+      return;
+    }
+
+    const completedRun = runs.find((r) => r.status === "completed");
+    if (!completedRun) return;
+
+    async function fetchSummary() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/runs/${completedRun!.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResultSummary(data.resultSummary ?? null);
+        }
+      } catch { /* ignore */ }
+    }
+
+    fetchSummary();
+    // Poll a few times in case summary is still generating
+    const interval = setInterval(fetchSummary, 5000);
+    const timeout = setTimeout(() => clearInterval(interval), 30000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [task?.status, runs, projectId]);
 
   // Load team agents when teamId changes
   useEffect(() => {
@@ -456,6 +486,33 @@ export default function TaskDetailPanel({
               {task.status === "running"
                 ? "⏳ Task is running. Details are locked during execution."
                 : "✓ Task completed. Create a new task to make changes."}
+            </p>
+          </div>
+        )}
+
+        {/* Result Summary */}
+        {task.status === "done" && resultSummary && (
+          <div className="mb-4 rounded-md border border-border bg-bg-secondary p-4">
+            <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
+              Result
+            </label>
+            <p className="whitespace-pre-wrap font-body text-sm text-text-primary">
+              {resultSummary}
+            </p>
+            {runs.length > 0 && runs[0].status === "completed" && (
+              <Link
+                to={`/projects/${projectId}/runs/${runs[0].id}`}
+                className="mt-2 inline-flex items-center gap-1 font-body text-xs text-primary hover:text-primary/80"
+              >
+                View full execution details →
+              </Link>
+            )}
+          </div>
+        )}
+        {task.status === "done" && !resultSummary && (
+          <div className="mb-4 rounded-md border border-border bg-bg-secondary p-4">
+            <p className="font-body text-sm text-text-secondary animate-pulse">
+              Generating summary...
             </p>
           </div>
         )}

@@ -101,6 +101,10 @@ export default function ExecutionPage() {
   // Cancel state
   const [cancelling, setCancelling] = useState(false);
 
+  // Result summary
+  const [resultSummary, setResultSummary] = useState<string | null>(null);
+  const [showFullReport, setShowFullReport] = useState(false);
+
   // SSE hook: only activated when run is still "running" and initial check is done.
   // While historyLoading is true, pass undefined to suppress SSE connection.
   const shouldUseSSE = !isHistoryMode && !historyLoading;
@@ -162,6 +166,11 @@ export default function ExecutionPage() {
         // Store startedAt for elapsed timer
         if (data.startedAt) {
           startedAtRef.current = data.startedAt;
+        }
+
+        // Store result summary
+        if (data.resultSummary) {
+          setResultSummary(data.resultSummary);
         }
         
         // Fetch task checklist if taskId exists
@@ -265,6 +274,28 @@ export default function ExecutionPage() {
 
   // The active state: either history data or SSE data
   const activeState = isHistoryMode && historyData ? historyData : sseState;
+
+  // Poll for result summary if completed but not yet available
+  useEffect(() => {
+    if (resultSummary || activeState.status === "running" || !projectId || !runId) return;
+    if (activeState.status !== "completed") return;
+
+    async function pollSummary() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/runs/${runId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.resultSummary) {
+            setResultSummary(data.resultSummary);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    const interval = setInterval(pollSummary, 5000);
+    const timeout = setTimeout(() => clearInterval(interval), 30000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [resultSummary, activeState.status, projectId, runId]);
 
   // Running duration timer
   useEffect(() => {
@@ -445,14 +476,50 @@ export default function ExecutionPage() {
         <TeamProgress agents={agents} agentStatuses={activeState.agentStatuses} />
       </section>
 
+      {/* Result Summary */}
+      {activeState.status === "completed" && (
+        <section className="mb-6">
+          <h2 className="mb-3 font-heading text-xl font-semibold text-black">
+            Result
+          </h2>
+          {resultSummary ? (
+            <div className="rounded-lg border border-success/20 bg-success-light p-4">
+              <p className="whitespace-pre-wrap font-body text-sm text-text-primary">
+                {resultSummary}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-bg-secondary p-4">
+              <p className="font-body text-sm text-text-secondary animate-pulse">
+                Generating summary...
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Two column layout: Left = Activity Log, Right = Checklist */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Activity Log (takes 2 columns) */}
         <section className="lg:col-span-2">
-          <h2 className="mb-3 font-heading text-xl font-semibold text-black">
-            Activity Log
-          </h2>
-          <ActivityLog entries={activeState.activityLog} />
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-heading text-xl font-semibold text-black">
+              Activity Log
+            </h2>
+            {activeState.status !== "running" && activeState.activityLog.length > 5 && (
+              <button
+                onClick={() => setShowFullReport((prev) => !prev)}
+                className="font-body text-sm text-primary hover:text-primary/80"
+              >
+                {showFullReport ? "Collapse" : `Show all (${activeState.activityLog.length})`}
+              </button>
+            )}
+          </div>
+          {activeState.status === "running" || showFullReport ? (
+            <ActivityLog entries={activeState.activityLog} />
+          ) : (
+            <ActivityLog entries={activeState.activityLog.slice(-5)} />
+          )}
         </section>
 
         {/* Right column: Checklist */}

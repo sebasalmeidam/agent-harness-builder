@@ -19,6 +19,7 @@ import * as teamService from "./team-service.js";
 import { exportHarness } from "./harness-service.js";
 import * as progressService from "./progress-service.js";
 import * as configService from "./config-service.js";
+import Anthropic from "@anthropic-ai/sdk";
 import { composeExecutionPrompt } from "./prompt-composer.js";
 
 // --- Types ---
@@ -592,6 +593,61 @@ function updateChecklistFromResults(
  * If the run is associated with a task (taskId is not null), updates the task status
  * and attempts to update checklist items based on activity log analysis.
  */
+/**
+ * Generates a concise result summary using the user's default model.
+ * Saves it to the run record.
+ */
+async function generateResultSummary(run: ExecutionRun): Promise<void> {
+  const apiKey = await configService.getApiKey();
+  if (!apiKey) return;
+
+  const model = await configService.getDefaultModel();
+
+  // Build a condensed version of the activity log (last 30 entries, truncated)
+  const recentLog = run.activityLog
+    .slice(-30)
+    .map((e) => `[${e.agentName}] ${e.message.slice(0, 300)}`)
+    .join("\n");
+
+  const filesChanged = run.files.length > 0
+    ? `\nFiles created/modified:\n${run.files.map((f) => `- ${f}`).join("\n")}`
+    : "";
+
+  const prompt = `You are summarizing the results of an automated task execution for a developer.
+
+Activity log:
+${recentLog}
+${filesChanged}
+
+Write a concise summary in 2-3 lines:
+1. What was built/done
+2. Key files to look at
+3. How to test or run it (if applicable)
+
+Be specific and actionable. No fluff.`;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model,
+      max_tokens: 300,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => (block as { type: "text"; text: string }).text)
+      .join("\n");
+
+    if (text) {
+      run.resultSummary = text;
+      await runService.save(run);
+    }
+  } catch (err) {
+    console.error("Result summary generation failed:", err);
+  }
+}
+
 async function completeRun(
   run: ExecutionRun,
   status: "completed" | "failed",
@@ -687,6 +743,13 @@ async function completeRun(
       } as unknown as Record<string, unknown>,
     },
   });
+
+  // Generate result summary asynchronously (don't block completion)
+  if (status === "completed") {
+    generateResultSummary(run).catch((err) => {
+      console.error("Failed to generate result summary:", err);
+    });
+  }
 
   // Cleanup: remove from active runs and emitters after a delay
   // to allow SSE clients to receive the final event
