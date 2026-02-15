@@ -128,6 +128,59 @@ router.put("/:taskId", async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/tasks/run-all - Execute all pending tasks sequentially
+router.post("/run-all", async (req, res) => {
+  try {
+    const projectId = getParam(req.params, "id");
+
+    // Get all tasks in order
+    const tasks = await taskService.list(projectId);
+    const pendingTasks = tasks.filter(
+      (t) => t.status === "pending" || t.status === "failed"
+    );
+
+    // Validate all pending tasks have teams
+    const unassigned = pendingTasks.filter((t) => !t.teamId);
+    if (unassigned.length > 0) {
+      res.status(400).json({
+        error: "All tasks must have a team assigned",
+        unassignedTasks: unassigned.map((t) => ({ id: t.id, title: t.title })),
+      });
+      return;
+    }
+
+    if (pendingTasks.length === 0) {
+      res.status(400).json({ error: "No pending tasks to execute" });
+      return;
+    }
+
+    // Return immediately with the task queue, then execute in background
+    const taskQueue = pendingTasks.map((t) => ({ id: t.id, title: t.title }));
+    res.json({ queued: taskQueue.length, tasks: taskQueue });
+
+    // Execute sequentially in background
+    (async () => {
+      for (const task of pendingTasks) {
+        try {
+          const { runId } = await executionService.startTaskRun(projectId, task.id);
+          const result = await executionService.waitForRunCompletion(runId);
+          if (result.status === "failed") {
+            // Stop on failure
+            console.log(`Run-all stopped: task "${task.title}" failed: ${result.error}`);
+            break;
+          }
+        } catch (err) {
+          console.error(`Run-all error on task "${task.title}":`, err);
+          break;
+        }
+      }
+    })();
+  } catch (err) {
+    console.error("Failed to start run-all:", err);
+    res.status(500).json({ error: "Failed to start run-all" });
+  }
+});
+
 // PATCH /api/projects/:id/tasks/reorder - Reorder tasks
 router.patch("/reorder", async (req, res) => {
   try {

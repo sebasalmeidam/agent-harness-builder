@@ -1383,6 +1383,51 @@ function extractFilePath(toolName: string, input: Record<string, unknown>): stri
   return null;
 }
 
+/**
+ * Returns a promise that resolves when a run completes (or rejects on timeout).
+ * Listens for the "run-status" event on the run's emitter.
+ */
+export function waitForRunCompletion(
+  runId: string,
+  timeoutMs = 600_000
+): Promise<{ status: "completed" | "failed"; error: string | null }> {
+  return new Promise((resolve, reject) => {
+    const emitter = runEmitters.get(runId);
+    if (!emitter) {
+      // Check if run already completed
+      const run = activeRuns.get(runId);
+      if (run && run.status !== "running") {
+        resolve({ status: run.status as "completed" | "failed", error: run.error });
+        return;
+      }
+      reject(new Error("Run not found"));
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Run timed out"));
+    }, timeoutMs);
+
+    function handler(event: RunEvent) {
+      if (event.type === "run-status") {
+        cleanup();
+        resolve({
+          status: event.data["status"] as "completed" | "failed",
+          error: (event.data["error"] as string) ?? null,
+        });
+      }
+    }
+
+    function cleanup() {
+      clearTimeout(timer);
+      emitter!.off("event", handler);
+    }
+
+    emitter.on("event", handler);
+  });
+}
+
 // --- Testing utilities ---
 
 /**

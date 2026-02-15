@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, Trash2, Clock, ExternalLink, Eye, EyeOff, GripVertical } from "lucide-react";
+import { Plus, Trash2, Clock, ExternalLink, Eye, EyeOff, GripVertical, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface ChecklistItem {
@@ -61,6 +61,8 @@ export default function TaskList({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragRef = useRef<string | null>(null);
+  const [runningAll, setRunningAll] = useState(false);
+  const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
@@ -289,6 +291,57 @@ export default function TaskList({
   // Filter tasks
   const visibleTasks = showDone ? tasks : tasks.filter((t) => t.status !== "done");
   const doneCount = tasks.filter((t) => t.status === "done").length;
+  const pendingTasks = tasks.filter((t) => t.status === "pending" || t.status === "failed");
+  const unassignedPending = pendingTasks.filter((t) => !t.teamId);
+  const canRunAll = pendingTasks.length > 0 && unassignedPending.length === 0 && !runningAll;
+
+  // Poll for task status changes during run-all
+  useEffect(() => {
+    if (!runningAll) return;
+    const interval = setInterval(() => {
+      fetchTasks().then(() => {
+        // Check progress
+        const currentTasks = tasks;
+        const stillPending = currentTasks.filter((t) => t.status === "pending" || t.status === "failed");
+        const running = currentTasks.filter((t) => t.status === "running");
+        const originalTotal = runAllProgress?.total ?? pendingTasks.length;
+        const completed = originalTotal - stillPending.length - running.length;
+        setRunAllProgress({ current: completed, total: originalTotal });
+
+        // Stop polling when all done or none running
+        if (stillPending.length === 0 && running.length === 0) {
+          setRunningAll(false);
+          setRunAllProgress(null);
+        }
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [runningAll, fetchTasks, tasks, runAllProgress, pendingTasks.length]);
+
+  // Run all handler
+  async function handleRunAll() {
+    setRunningAll(true);
+    setRunAllProgress({ current: 0, total: pendingTasks.length });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/run-all`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.unassignedTasks) {
+          setError(`Assign a team to all tasks first: ${data.unassignedTasks.map((t: { title: string }) => t.title).join(", ")}`);
+        } else {
+          setError(data.error || "Failed to start run-all");
+        }
+        setRunningAll(false);
+        setRunAllProgress(null);
+      }
+    } catch {
+      setError("Failed to start run-all");
+      setRunningAll(false);
+      setRunAllProgress(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -317,6 +370,26 @@ export default function TaskList({
             <Plus className="h-4 w-4" />
             Add Task
           </button>
+          {pendingTasks.length > 0 && (
+            <button
+              onClick={handleRunAll}
+              disabled={!canRunAll}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              title={
+                unassignedPending.length > 0
+                  ? `Assign a team to all tasks first (${unassignedPending.length} unassigned)`
+                  : runningAll
+                    ? "Execution in progress..."
+                    : `Run ${pendingTasks.length} task${pendingTasks.length > 1 ? "s" : ""} sequentially`
+              }
+              data-testid="run-all-button"
+            >
+              <Play className="h-4 w-4" />
+              {runningAll
+                ? `Running ${runAllProgress?.current ?? 0}/${runAllProgress?.total ?? 0}...`
+                : `Run All (${pendingTasks.length})`}
+            </button>
+          )}
           {doneCount > 0 && (
             <button
               onClick={() => setShowDone((prev) => !prev)}
