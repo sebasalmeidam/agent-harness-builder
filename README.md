@@ -34,8 +34,10 @@ Only **Node.js 22+** is required. The setup script auto-installs everything else
 ## 🧩 How It Works
 
 ```
-Create Team  →  Add Agents  →  Connect  →  Execute
-(name/desc)     (role/goal)    (workflow)   (task)
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Create Team │ ──▶ │  Add Agents  │ ──▶ │   Connect    │ ──▶ │   Execute    │
+│  (name/desc) │     │  (role/goal) │     │  (workflow)  │     │    (task)    │
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
 1. **Create a Team**: Give it a name and description
