@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Save } from "lucide-react";
 import type { AgentNodeData } from "../canvas/AgentNode";
 import TagList from "./TagList";
 import TextList from "./TextList";
@@ -20,6 +20,8 @@ interface AgentSidebarProps {
   onChange: (data: AgentNodeData) => void;
   onClose: () => void;
   onDelete: () => void;
+  onSave?: () => void;
+  isDirty?: boolean;
 }
 
 interface SkillSummary {
@@ -33,6 +35,8 @@ export default function AgentSidebar({
   onChange,
   onClose,
   onDelete,
+  onSave,
+  isDirty,
 }: AgentSidebarProps) {
   const [availableSkills, setAvailableSkills] = useState<SkillSummary[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
@@ -326,7 +330,17 @@ export default function AgentSidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-border px-4 py-3">
+      <div className="border-t border-border px-4 py-3 space-y-2">
+        {onSave && isDirty && (
+          <button
+            type="button"
+            onClick={onSave}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          >
+            <Save className="h-4 w-4" />
+            Save Changes
+          </button>
+        )}
         <button
           type="button"
           onClick={handleDeleteClick}

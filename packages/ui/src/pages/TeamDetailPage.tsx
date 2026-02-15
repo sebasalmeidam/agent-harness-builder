@@ -736,6 +736,8 @@ function TeamDetailContent() {
             onChange={handleAgentDataChange}
             onClose={handleCloseSidebar}
             onDelete={handleDeleteAgent}
+            onSave={handleSave}
+            isDirty={isDirty}
           />
         )}
 
