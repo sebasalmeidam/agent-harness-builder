@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Trash2, FolderOpen } from "lucide-react";
+import { Trash2, FolderOpen, Pencil, X, Check } from "lucide-react";
 import TaskList from "../components/tasks/TaskList";
 import TaskDetailPanel from "../components/tasks/TaskDetailPanel";
 import InitializeButton from "../components/tasks/InitializeButton";
@@ -74,6 +74,7 @@ export default function ProjectDetailPage() {
   // Inline editing state for name and description
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [isEditingHeader, setIsEditingHeader] = useState(false);
   const nameBeforeEdit = useRef("");
   const descriptionBeforeEdit = useRef("");
 
@@ -156,23 +157,24 @@ export default function ProjectDetailPage() {
     [project],
   );
 
-  const handleNameBlur = useCallback(() => {
-    const trimmed = editName.trim();
-    if (trimmed.length === 0) {
-      // Revert to previous value -- empty name is not allowed
+  const handleSaveHeader = useCallback(() => {
+    const trimmedName = editName.trim();
+    if (trimmedName.length === 0) {
       setEditName(nameBeforeEdit.current);
-      return;
+    } else if (trimmedName !== nameBeforeEdit.current) {
+      handlePatchField("name", trimmedName);
     }
-    if (trimmed !== nameBeforeEdit.current) {
-      handlePatchField("name", trimmed);
-    }
-  }, [editName, handlePatchField]);
-
-  const handleDescriptionBlur = useCallback(() => {
     if (editDescription !== descriptionBeforeEdit.current) {
       handlePatchField("description", editDescription);
     }
-  }, [editDescription, handlePatchField]);
+    setIsEditingHeader(false);
+  }, [editName, editDescription, handlePatchField]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditName(nameBeforeEdit.current);
+    setEditDescription(descriptionBeforeEdit.current);
+    setIsEditingHeader(false);
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (!project) return;
@@ -242,41 +244,97 @@ export default function ProjectDetailPage() {
         <span className="text-text-primary">{project.name}</span>
       </nav>
 
-      {/* Project header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex flex-1 gap-3">
-          <span className="text-[32px] leading-none" data-testid="project-emoji">
-            {project.emoji || "\u{1F4E6}"}
-          </span>
-          <div className="flex-1">
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleNameBlur}
-              aria-label="Project name"
-              className="w-full border-0 bg-transparent p-0 font-heading text-[28px] font-semibold text-black focus:outline-none focus:ring-0"
-            />
-            <textarea
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              onBlur={handleDescriptionBlur}
-              placeholder="Add a project description... (used as input for Initialize Project)"
-              aria-label="Project description"
-              rows={2}
-              className="mt-1 w-full resize-none rounded-md border border-transparent bg-transparent px-2 py-1 font-body text-sm text-text-secondary transition-colors hover:border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+      {/* Project header card */}
+      <div className="mb-6 rounded-lg border border-border bg-bg-primary p-5">
+        {isEditingHeader ? (
+          /* Edit mode */
+          <div>
+            <div className="flex items-start gap-3">
+              <span className="text-[32px] leading-none" data-testid="project-emoji">
+                {project.emoji || "\u{1F4E6}"}
+              </span>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  aria-label="Project name"
+                  autoFocus
+                  className="w-full rounded-md border border-border bg-white px-3 py-1.5 font-heading text-xl font-semibold text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Describe the project (used as input for Initialize Project)"
+                  aria-label="Project description"
+                  rows={2}
+                  className="mt-2 w-full resize-none rounded-md border border-border bg-white px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                {project.path && (
+                  <div className="mt-2 flex items-center gap-1.5 font-body text-xs text-text-muted">
+                    <FolderOpen className="h-3 w-3" />
+                    <span className="font-mono">{project.path}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                onClick={handleCancelEdit}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 font-body text-sm text-text-secondary hover:bg-bg-secondary"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveHeader}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 font-body text-sm font-medium text-white hover:bg-primary/90"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Save
+              </button>
+            </div>
           </div>
-        </div>
-
-        <button
-          onClick={handleDelete}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-secondary transition-colors hover:border-red-300 hover:text-red-600"
-          title="Delete project"
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete
-        </button>
+        ) : (
+          /* View mode */
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-1 gap-3">
+              <span className="text-[32px] leading-none" data-testid="project-emoji">
+                {project.emoji || "\u{1F4E6}"}
+              </span>
+              <div className="flex-1">
+                <h1 className="font-heading text-2xl font-semibold text-black">
+                  {project.name}
+                </h1>
+                <p className="mt-1 font-body text-sm text-text-secondary">
+                  {project.description || "No description"}
+                </p>
+                {project.path && (
+                  <div className="mt-2 flex items-center gap-1.5 font-body text-xs text-text-muted">
+                    <FolderOpen className="h-3 w-3" />
+                    <span className="font-mono">{project.path}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsEditingHeader(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
+                title="Edit project"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-secondary hover:text-red-600"
+                title="Delete project"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Save message */}
