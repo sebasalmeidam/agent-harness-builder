@@ -432,6 +432,31 @@ function addActivityEntry(run: ExecutionRun, entry: ActivityEntry): void {
     type: "activity",
     data: entry as unknown as Record<string, unknown>,
   });
+
+  // Periodically update checklist during execution (every 10 entries)
+  if (run.taskId && run.activityLog.length % 10 === 0) {
+    updateChecklistDuringExecution(run).catch(() => {});
+  }
+}
+
+/**
+ * Updates the task checklist mid-execution based on activity log so far.
+ */
+async function updateChecklistDuringExecution(run: ExecutionRun): Promise<void> {
+  if (!run.taskId) return;
+  const task = await taskService.get(run.projectId, run.taskId);
+  if (!task) return;
+
+  const updatedChecklist = updateChecklistFromResults(task, run.activityLog);
+  const changed = updatedChecklist.some((item, i) =>
+    item.completed !== task.checklist[i]?.completed
+  );
+
+  if (changed) {
+    await taskService.update(run.projectId, run.taskId, {
+      checklist: updatedChecklist,
+    });
+  }
 }
 
 /**
@@ -677,33 +702,20 @@ async function completeRun(
   if (run.taskId) {
     const taskStatus = status === "completed" ? "done" : "failed";
 
-    // If execution was successful, try to update checklist based on activity log
-    if (status === "completed") {
-      const task = await taskService.get(run.projectId, run.taskId);
-      if (task) {
-        const updatedChecklist = updateChecklistFromResults(
-          task,
-          run.activityLog,
-        );
-        checklistTotal = updatedChecklist.length;
-        checklistCompleted = updatedChecklist.filter(item => item.completed).length;
-        await taskService.update(run.projectId, run.taskId, {
-          status: taskStatus,
-          checklist: updatedChecklist,
-        });
-      } else {
-        // Task not found, just update status
-        await taskService.update(run.projectId, run.taskId, {
-          status: taskStatus,
-        });
-      }
+    // Always try to update checklist based on activity log (completed, failed, or cancelled)
+    const task = await taskService.get(run.projectId, run.taskId);
+    if (task) {
+      const updatedChecklist = updateChecklistFromResults(
+        task,
+        run.activityLog,
+      );
+      checklistTotal = updatedChecklist.length;
+      checklistCompleted = updatedChecklist.filter(item => item.completed).length;
+      await taskService.update(run.projectId, run.taskId, {
+        status: taskStatus,
+        checklist: updatedChecklist,
+      });
     } else {
-      // Failed execution, just update status and get checklist stats
-      const task = await taskService.get(run.projectId, run.taskId);
-      if (task) {
-        checklistTotal = task.checklist.length;
-        checklistCompleted = task.checklist.filter(item => item.completed).length;
-      }
       await taskService.update(run.projectId, run.taskId, {
         status: taskStatus,
       });
