@@ -509,7 +509,7 @@ export default function TaskList({
                   >
                     {task.status}
                   </span>
-                  {task.status === "done" ? (
+                  {(task.status === "done" || task.status === "running") ? (
                     task.teamId && (
                       <span className="font-body text-xs text-text-secondary">
                         {teams.find((t) => t.id === task.teamId)?.name ?? "Team"}
@@ -573,7 +573,7 @@ export default function TaskList({
                 )}
               </div>
 
-              {task.status !== "done" && (
+              {task.status !== "done" && task.status !== "running" && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
