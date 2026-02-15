@@ -424,7 +424,7 @@ export default function TaskDetailPanel({
     return null;
   }
 
-  const isDone = task.status === "done";
+  const isLocked = task.status === "done" || task.status === "running";
 
   return (
     <div className="space-y-6">
@@ -445,11 +445,17 @@ export default function TaskDetailPanel({
           )}
         </div>
 
-        {/* Completed notice */}
-        {isDone && (
-          <div className="mb-4 rounded-md border border-success/20 bg-success-light px-4 py-2.5">
-            <p className="font-body text-sm text-success">
-              ✓ Task completed. Create a new task to make changes.
+        {/* Locked notice */}
+        {isLocked && (
+          <div className={`mb-4 rounded-md border px-4 py-2.5 ${
+            task.status === "running"
+              ? "border-info/20 bg-info-light"
+              : "border-success/20 bg-success-light"
+          }`}>
+            <p className={`font-body text-sm ${task.status === "running" ? "text-info" : "text-success"}`}>
+              {task.status === "running"
+                ? "⏳ Task is running. Details are locked during execution."
+                : "✓ Task completed. Create a new task to make changes."}
             </p>
           </div>
         )}
@@ -462,10 +468,10 @@ export default function TaskDetailPanel({
           <input
             type="text"
             value={editTitle}
-            onChange={(e) => !isDone && setEditTitle(e.target.value)}
+            onChange={(e) => !isLocked && setEditTitle(e.target.value)}
             onBlur={handleTitleBlur}
-            disabled={isDone}
-            className={`w-full rounded-md border border-border px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isDone ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
+            disabled={isLocked}
+            className={`w-full rounded-md border border-border px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isLocked ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
             data-testid="task-title-input"
           />
         </div>
@@ -477,12 +483,12 @@ export default function TaskDetailPanel({
           </label>
           <textarea
             value={editDescription}
-            onChange={(e) => !isDone && setEditDescription(e.target.value)}
+            onChange={(e) => !isLocked && setEditDescription(e.target.value)}
             onBlur={handleDescriptionBlur}
-            disabled={isDone}
+            disabled={isLocked}
             placeholder="Add a description..."
             rows={3}
-            className={`w-full rounded-md border border-border px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isDone ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
+            className={`w-full rounded-md border border-border px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isLocked ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
             data-testid="task-description-input"
           />
         </div>
@@ -492,7 +498,7 @@ export default function TaskDetailPanel({
           <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
             Checklist
           </label>
-          <div className={isDone ? "pointer-events-none opacity-60" : ""}>
+          <div className={isLocked ? "pointer-events-none opacity-60" : ""}>
             <ChecklistEditor
               items={editChecklist}
               onChange={handleChecklistChange}
@@ -505,7 +511,7 @@ export default function TaskDetailPanel({
           <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
             Assigned Team
           </label>
-          <div className={isDone ? "pointer-events-none opacity-60" : ""}>
+          <div className={isLocked ? "pointer-events-none opacity-60" : ""}>
             <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
           </div>
         </div>
