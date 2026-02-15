@@ -47,14 +47,14 @@ async function loadConfig(): Promise<AppConfig> {
     const parsed = JSON.parse(content) as Partial<AppConfig>;
     return {
       apiKey: parsed.apiKey ?? "",
-      defaultModel: parsed.defaultModel ?? "claude-sonnet-4-20250514",
+      defaultModel: parsed.defaultModel ?? "claude-sonnet-4-5-20250929",
       defaultProjectsPath: parsed.defaultProjectsPath ?? join(homedir(), "projects"),
     };
   } catch {
     // File doesn't exist or is invalid - return defaults
     return {
       apiKey: "",
-      defaultModel: "claude-sonnet-4-20250514",
+      defaultModel: "claude-sonnet-4-5-20250929",
       defaultProjectsPath: join(homedir(), "projects"),
     };
   }
@@ -108,7 +108,7 @@ export async function getApiKey(): Promise<string> {
  */
 export async function getDefaultModel(): Promise<string> {
   const config = await getConfig();
-  return config.defaultModel || "claude-sonnet-4-20250514";
+  return config.defaultModel || "claude-sonnet-4-5-20250929";
 }
 
 /**
@@ -123,7 +123,7 @@ export async function getSettings(): Promise<{ apiKey: string; defaultModel: str
   
   return {
     apiKey: maskApiKey(activeKey),
-    defaultModel: config.defaultModel || "claude-sonnet-4-20250514",
+    defaultModel: config.defaultModel || "claude-sonnet-4-5-20250929",
     defaultProjectsPath: config.defaultProjectsPath || join(homedir(), "projects"),
     hasEnvKey: !!envKey,
   };
@@ -163,7 +163,7 @@ export async function testApiKey(): Promise<{ valid: boolean; error?: string }> 
     
     // Make a minimal API call to test the key
     await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 1,
       messages: [{ role: "user", content: "Hi" }],
     });
