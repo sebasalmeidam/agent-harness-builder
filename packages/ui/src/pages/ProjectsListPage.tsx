@@ -68,6 +68,9 @@ export default function ProjectsListPage() {
       <h1 className="font-heading text-[28px] font-semibold text-black">
         Projects
       </h1>
+      <p className="mt-1 font-body text-sm text-text-secondary">
+        Manage your AI-powered projects
+      </p>
 
       {error && (
         <ErrorCard message={error} onRetry={fetchProjects} className="mt-4" />
@@ -100,17 +103,19 @@ export default function ProjectsListPage() {
                 to={`/projects/${project.id}`}
                 className="flex flex-1 flex-col"
               >
-                <h2 className="font-heading text-lg font-semibold text-black">
-                  {project.name}
-                </h2>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl leading-none">
+                    {project.emoji || "📦"}
+                  </span>
+                  <h2 className="font-heading text-lg font-semibold text-black">
+                    {project.name}
+                  </h2>
+                </div>
                 {project.description && (
                   <p className="mt-1 line-clamp-2 font-body text-sm text-text-secondary">
                     {project.description}
                   </p>
                 )}
-                <div className="mt-2 font-body text-xs text-text-secondary font-mono truncate" title={project.path}>
-                  {project.path || "No path configured"}
-                </div>
                 <div className="mt-auto pt-4 flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-bg-secondary px-2 py-0.5 font-body text-xs text-text-secondary">
                     {project.taskCount} {project.taskCount === 1 ? "task" : "tasks"}
