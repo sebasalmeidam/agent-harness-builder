@@ -38,7 +38,7 @@ export default function TagList({ label, hint, tags, onChange }: TagListProps) {
         {hint && (
           <span className="group relative">
             <HelpCircle className="h-3.5 w-3.5 text-text-muted" />
-            <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-48 -translate-x-1/2 rounded-md bg-black px-2.5 py-1.5 font-body text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 w-52 rounded-md bg-black px-2.5 py-1.5 font-body text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               {hint}
             </span>
           </span>
