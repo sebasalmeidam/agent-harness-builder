@@ -451,7 +451,7 @@ describe("translateHarness", () => {
     expect(qaPrompt).toContain("Developer passes work to you");
   });
 
-  it("defaults model to claude-sonnet-4-20250514 when not specified", () => {
+  it("defaults model to claude-sonnet-4-5-20250929 when not specified", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({ id: "a1", name: "Lead" }),
@@ -462,8 +462,8 @@ describe("translateHarness", () => {
 
     const result = translateHarness(harness, "Check models");
 
-    expect(result.leadAgent.model).toBe("claude-sonnet-4-20250514");
-    expect(result.teammates[0].model).toBe("claude-sonnet-4-20250514");
+    expect(result.leadAgent.model).toBe("claude-sonnet-4-5-20250929");
+    expect(result.teammates[0].model).toBe("claude-sonnet-4-5-20250929");
   });
 
   it("passes through explicit model from agent to TranslatedAgent", () => {
@@ -485,7 +485,7 @@ describe("translateHarness", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({ id: "lead", name: "Lead", model: "claude-opus-4-20250514" }),
-        makeAgent({ id: "dev1", name: "Dev1", model: "claude-sonnet-4-20250514" }),
+        makeAgent({ id: "dev1", name: "Dev1", model: "claude-sonnet-4-5-20250929" }),
         makeAgent({ id: "dev2", name: "Dev2", model: "claude-haiku-3-5-20241022" }),
       ],
       edges: [
@@ -499,7 +499,7 @@ describe("translateHarness", () => {
     expect(result.leadAgent.name).toBe("Lead");
     expect(result.leadAgent.model).toBe("claude-opus-4-20250514");
     expect(result.teammates).toHaveLength(2);
-    expect(result.teammates.find((t) => t.name === "Dev1")?.model).toBe("claude-sonnet-4-20250514");
+    expect(result.teammates.find((t) => t.name === "Dev1")?.model).toBe("claude-sonnet-4-5-20250929");
     expect(result.teammates.find((t) => t.name === "Dev2")?.model).toBe("claude-haiku-3-5-20241022");
   });
 
@@ -515,7 +515,7 @@ describe("translateHarness", () => {
     const result = translateHarness(harness, "Mixed defaults");
 
     expect(result.leadAgent.name).toBe("DefaultAgent");
-    expect(result.leadAgent.model).toBe("claude-sonnet-4-20250514");
+    expect(result.leadAgent.model).toBe("claude-sonnet-4-5-20250929");
     expect(result.teammates[0].name).toBe("CustomAgent");
     expect(result.teammates[0].model).toBe("custom-model-123");
   });

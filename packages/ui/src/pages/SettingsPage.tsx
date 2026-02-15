@@ -10,8 +10,8 @@ interface Settings {
 }
 
 const AVAILABLE_MODELS = [
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (claude-sonnet-4-20250514)" },
-  { value: "claude-opus-4-0-20250115", label: "Claude Opus 4 (claude-opus-4-0-20250115)" },
+  { value: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)" },
+  { value: "claude-opus-4-6-20250715", label: "Claude Opus 4.6 (claude-opus-4-6-20250715)" },
   { value: "claude-haiku-3-5-20241022", label: "Claude Haiku 3.5 (claude-haiku-3-5-20241022)" },
 ];
 
@@ -23,7 +23,7 @@ export default function SettingsPage() {
   // Form state
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
-  const [defaultModel, setDefaultModel] = useState("claude-sonnet-4-20250514");
+  const [defaultModel, setDefaultModel] = useState("claude-sonnet-4-5-20250929");
   const [defaultProjectsPath, setDefaultProjectsPath] = useState("");
   
   // Save state
@@ -165,7 +165,7 @@ export default function SettingsPage() {
   // Detect unsaved changes
   const hasChanges =
     apiKey.trim().length > 0 ||
-    defaultModel !== (settings?.defaultModel ?? "claude-sonnet-4-20250514") ||
+    defaultModel !== (settings?.defaultModel ?? "claude-sonnet-4-5-20250929") ||
     defaultProjectsPath !== (settings?.defaultProjectsPath ?? "");
 
   return (

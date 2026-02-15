@@ -99,7 +99,7 @@ export async function list(): Promise<TeamSummary[]> {
       team.agents = team.agents.map((agent) => ({
         ...agent,
         skillIds: agent.skillIds ?? [],
-        model: agent.model ?? "claude-sonnet-4-20250514",
+        model: agent.model ?? "claude-sonnet-4-5-20250929",
       }));
       summaries.push({
         id: team.id,
@@ -126,7 +126,7 @@ export async function get(id: string): Promise<Team | null> {
     team.agents = team.agents.map((agent) => ({
       ...agent,
       skillIds: agent.skillIds ?? [],
-      model: agent.model ?? "claude-sonnet-4-20250514",
+      model: agent.model ?? "claude-sonnet-4-5-20250929",
     }));
     return team;
   } catch {

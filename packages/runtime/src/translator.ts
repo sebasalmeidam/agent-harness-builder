@@ -5,7 +5,7 @@
 import type { HarnessData, HarnessAgent, HarnessEdge } from "./harness-schema.js";
 import type { TranslatedTeam, TranslatedAgent } from "./types.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 
 /**
  * Identifies the lead agent from harness data.
