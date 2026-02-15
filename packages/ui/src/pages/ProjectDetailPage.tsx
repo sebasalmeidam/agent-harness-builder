@@ -157,7 +157,7 @@ export default function ProjectDetailPage() {
     [project],
   );
 
-  const handleSaveHeader = useCallback(() => {
+  const handleSaveHeader = useCallback(async () => {
     const trimmedName = editName.trim();
     if (trimmedName.length === 0) {
       setEditName(nameBeforeEdit.current);
@@ -167,8 +167,39 @@ export default function ProjectDetailPage() {
     if (editDescription !== descriptionBeforeEdit.current) {
       handlePatchField("description", editDescription);
     }
+    // Save path if changed
+    if (editingPath !== null && editingPath !== project?.path) {
+      const trimmedPath = editingPath.trim();
+      if (trimmedPath && project) {
+        if (project.hasExecutedTasks) {
+          const confirmed = window.confirm(
+            "This project has executed tasks using the previous path. Changing it means new executions target a different directory.\n\nContinue?"
+          );
+          if (!confirmed) {
+            setEditingPath(null);
+            setIsEditingHeader(false);
+            return;
+          }
+        }
+        setSavingPath(true);
+        try {
+          const res = await fetch(`/api/projects/${project.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: trimmedPath }),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setProject(updated);
+            setEditingPath(null);
+          }
+        } catch { /* ignore */ } finally {
+          setSavingPath(false);
+        }
+      }
+    }
     setIsEditingHeader(false);
-  }, [editName, editDescription, handlePatchField]);
+  }, [editName, editDescription, editingPath, project, handlePatchField]);
 
   const handleCancelEdit = useCallback(() => {
     setEditName(nameBeforeEdit.current);
@@ -270,12 +301,19 @@ export default function ProjectDetailPage() {
                   rows={2}
                   className="mt-2 w-full resize-none rounded-md border border-border bg-white px-3 py-1.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-                {project.path && (
-                  <div className="mt-2 flex items-center gap-1.5 font-body text-xs text-text-muted">
+                <div className="mt-2">
+                  <label className="flex items-center gap-1.5 font-body text-xs font-medium text-text-secondary">
                     <FolderOpen className="h-3 w-3" />
-                    <span className="font-mono">{project.path}</span>
-                  </div>
-                )}
+                    Project Path
+                  </label>
+                  <input
+                    type="text"
+                    value={editingPath ?? project.path ?? ""}
+                    onChange={(e) => setEditingPath(e.target.value)}
+                    placeholder="/absolute/path/to/project"
+                    className="mt-1 w-full rounded-md border border-border bg-white px-3 py-1.5 font-body text-sm font-mono text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-end gap-2">
@@ -288,7 +326,8 @@ export default function ProjectDetailPage() {
               </button>
               <button
                 onClick={handleSaveHeader}
-                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 font-body text-sm font-medium text-white hover:bg-primary/90"
+                disabled={savingPath}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 font-body text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" />
                 Save
@@ -350,68 +389,6 @@ export default function ProjectDetailPage() {
           {saveMessage.text}
         </div>
       )}
-
-      {/* Project path section */}
-      <div className="mb-6 rounded-lg border border-border bg-bg-primary p-6">
-        <div className="flex items-center gap-2 mb-2">
-          <FolderOpen className="h-4 w-4 text-text-secondary" />
-          <h2 className="font-heading text-lg font-semibold text-black">
-            Project Path
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            className="flex-1 rounded-md border border-border bg-bg-secondary px-3 py-1.5 font-body text-sm font-mono text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            data-testid="project-path"
-            value={editingPath ?? project.path ?? ""}
-            placeholder="/absolute/path/to/project"
-            onChange={(e) => setEditingPath(e.target.value)}
-          />
-          {editingPath !== null && editingPath !== project.path && (
-            <button
-              className="rounded-md bg-primary px-3 py-1.5 font-body text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-              disabled={savingPath}
-              onClick={async () => {
-                const trimmed = editingPath.trim();
-                if (!trimmed) return;
-                if (project.hasExecutedTasks) {
-                  const confirmed = window.confirm(
-                    "This project has tasks that were already executed using the previous path. Changing the path means new executions will target a different directory.\n\nThe previous path will be noted in execution prompts for context.\n\nContinue?"
-                  );
-                  if (!confirmed) return;
-                }
-                setSavingPath(true);
-                try {
-                  const res = await fetch(`/api/projects/${project.id}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path: trimmed }),
-                  });
-                  if (!res.ok) {
-                    const data = await res.json();
-                    setSaveMessage({ type: "error", text: data.error || "Failed to update path" });
-                  } else {
-                    const updated = await res.json();
-                    setProject(updated);
-                    setEditingPath(null);
-                    setSaveMessage({ type: "success", text: "Path updated. New tasks will use this directory." });
-                  }
-                } catch {
-                  setSaveMessage({ type: "error", text: "Failed to update path" });
-                } finally {
-                  setSavingPath(false);
-                }
-              }}
-            >
-              {savingPath ? "Saving..." : "Save"}
-            </button>
-          )}
-        </div>
-        <p className="mt-1 font-body text-xs text-text-secondary">
-          Absolute path to the project directory. Created automatically if it doesn't exist.
-        </p>
-      </div>
 
       {/* Tasks section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
