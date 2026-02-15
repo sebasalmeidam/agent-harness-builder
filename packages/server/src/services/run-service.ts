@@ -136,6 +136,10 @@ export async function cleanupZombieRuns(): Promise<number> {
           run.status = "failed";
           run.completedAt = new Date().toISOString();
           run.error = "Execution lost: server restarted while running";
+          // Transition all agent statuses to "done"
+          for (const agentName of Object.keys(run.agentStatuses)) {
+            run.agentStatuses[agentName] = "done";
+          }
           run.summary = {
             filesChanged: run.files.length,
             totalTime: duration,
