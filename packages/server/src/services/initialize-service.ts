@@ -218,7 +218,7 @@ Return the suggestions as a JSON array of objects, each with the structure:
   try {
     const response = await client.messages.create(
       {
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         max_tokens: 4096,
         messages: [
           {
