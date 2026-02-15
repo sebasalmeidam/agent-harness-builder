@@ -178,11 +178,13 @@ export default function CreateProjectPage() {
               setPath(e.target.value);
               setAutoFillPath(false); // Disable auto-fill when user manually edits
             }}
-            placeholder="/home/user/projects/my-app"
+            placeholder={defaultProjectsPath ? `${defaultProjectsPath}/my-project` : "/home/user/projects/my-app"}
             className="mt-1 block w-full rounded-md border border-border bg-bg-primary px-3 py-2 font-body text-sm font-mono text-black placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <p className="mt-1 font-body text-xs text-text-secondary">
-            Absolute path to the local project directory. Will be created automatically if it doesn't exist.
+            {defaultProjectsPath
+              ? `Auto-filled from base path: ${defaultProjectsPath}. Edit to customize.`
+              : "Set a default base path in Settings to auto-fill this field."}
           </p>
         </div>
 

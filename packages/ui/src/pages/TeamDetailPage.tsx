@@ -693,7 +693,11 @@ function TeamDetailContent() {
                   ? "Save changes first"
                   : "Generate team workflow with AI"
           }
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm font-medium text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary"
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            editedWorkflow
+              ? "border border-border bg-bg-primary text-text-primary hover:border-primary hover:text-primary disabled:hover:border-border disabled:hover:text-text-primary"
+              : "bg-primary text-white hover:bg-primary/90"
+          }`}
         >
           {generatingWorkflow ? (
             <>
@@ -709,8 +713,8 @@ function TeamDetailContent() {
         </button>
       </div>
 
-      {/* Canvas + Sidebar flex container */}
-      <div className="flex flex-1 overflow-hidden rounded-lg border border-border bg-bg-primary">
+      {/* Canvas + Sidebar flex container (drag bottom edge to resize) */}
+      <div className="flex min-h-[300px] flex-1 resize-y overflow-hidden rounded-lg border border-border bg-bg-primary">
         {/* Canvas grows to fill available space */}
         <div className="min-w-0 flex-1">
           <TeamCanvas

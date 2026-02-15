@@ -257,14 +257,14 @@ export default function ProjectDetailPage() {
               aria-label="Project name"
               className="w-full border-0 bg-transparent p-0 font-heading text-[28px] font-semibold text-black focus:outline-none focus:ring-0"
             />
-            <input
-              type="text"
+            <textarea
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               onBlur={handleDescriptionBlur}
-              placeholder="Add a description..."
+              placeholder="Add a project description... (used as input for Initialize Project)"
               aria-label="Project description"
-              className="mt-1 w-full border-0 bg-transparent p-0 font-body text-sm text-text-secondary focus:outline-none focus:ring-0"
+              rows={2}
+              className="mt-1 w-full resize-none rounded-md border border-transparent bg-transparent px-2 py-1 font-body text-sm text-text-secondary transition-colors hover:border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
