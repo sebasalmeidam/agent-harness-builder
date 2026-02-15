@@ -206,8 +206,35 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* Quick Setup Section */}
       <section className="px-6 py-20 sm:px-12">
+        <div className="mx-auto max-w-3xl">
+          <h3 className="text-center font-heading text-3xl font-semibold text-black">
+            Quick setup
+          </h3>
+          <p className="mt-3 text-center font-body text-lg text-text-secondary">
+            Three commands to get started
+          </p>
+          <div className="mt-10 overflow-hidden rounded-xl border border-border bg-[#1e1e2e] p-6 font-mono text-sm leading-relaxed text-gray-300">
+            <div className="flex items-center gap-2 text-text-muted">
+              <span className="text-xs">$</span>
+            </div>
+            <pre className="mt-3 whitespace-pre-wrap">
+              <span className="text-gray-500"># Clone and setup</span>
+              {"\n"}git clone https://github.com/sebasalmeidam/agent-harness-builder.git{"\n"}cd agent-harness-builder{"\n"}./setup.sh
+              {"\n\n"}
+              <span className="text-gray-500"># Start the app</span>
+              {"\n"}pnpm dev
+            </pre>
+          </div>
+          <p className="mt-4 text-center font-body text-sm text-text-muted">
+            Requires Node.js 22+. The setup script auto-installs pnpm and Claude Code CLI.
+          </p>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="bg-bg-secondary px-6 py-20 sm:px-12">
         <div className="mx-auto max-w-2xl text-center">
           <h3 className="font-heading text-3xl font-semibold text-black">
             Ready to build your team?
@@ -216,10 +243,10 @@ export default function LandingPage() {
             Create your first agent team in minutes. No infrastructure required.
           </p>
           <Link
-            to="/projects"
+            to="/"
             className="mt-8 inline-block rounded-lg bg-primary px-8 py-3 font-body text-base font-semibold text-white transition-colors hover:bg-primary/90"
           >
-            Get Started
+            Go to Dashboard
           </Link>
         </div>
       </section>

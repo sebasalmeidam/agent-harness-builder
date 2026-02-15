@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Users, FolderKanban, ChevronRight, ChevronLeft, Sparkles, Settings, AlertCircle } from 'lucide-react';
+import { Home, Users, FolderKanban, ChevronRight, ChevronLeft, Sparkles, Settings, AlertCircle, Info } from 'lucide-react';
 
 interface NavItem {
   to: string;
@@ -84,7 +84,7 @@ export default function Sidebar({
 
       <div className={`mb-4 h-px bg-border ${expanded ? 'w-full' : 'w-8'}`} />
 
-      <nav className={`flex flex-col gap-2 ${expanded ? 'w-full' : 'items-center'}`}>
+      <nav className={`flex flex-1 flex-col gap-2 ${expanded ? 'w-full' : 'items-center'}`}>
         {navItems.map((item) => {
           if (item.disabled) {
             return (
@@ -146,6 +146,33 @@ export default function Sidebar({
             </NavLink>
           );
         })}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* About link at bottom */}
+        <NavLink
+          to="/landing"
+          title="About"
+          className={({ isActive }) =>
+            `flex h-10 items-center rounded-md transition-colors ${
+              expanded ? 'w-full gap-3 px-3' : 'w-10 justify-center'
+            } ${
+              isActive
+                ? 'border-l-3 border-primary bg-primary-light text-primary'
+                : 'text-text-muted hover:bg-bg-secondary hover:text-text-secondary'
+            }`
+          }
+        >
+          <span className="shrink-0"><Info size={20} /></span>
+          <span
+            className={`overflow-hidden whitespace-nowrap font-body text-sm transition-opacity duration-200 ${
+              expanded ? 'opacity-100' : 'w-0 opacity-0'
+            }`}
+          >
+            About
+          </span>
+        </NavLink>
       </nav>
     </aside>
   );
