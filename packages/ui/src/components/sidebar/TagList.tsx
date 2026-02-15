@@ -3,11 +3,12 @@ import { X } from "lucide-react";
 
 interface TagListProps {
   label: string;
+  hint?: string;
   tags: string[];
   onChange: (tags: string[]) => void;
 }
 
-export default function TagList({ label, tags, onChange }: TagListProps) {
+export default function TagList({ label, hint, tags, onChange }: TagListProps) {
   const [inputValue, setInputValue] = useState("");
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -32,9 +33,12 @@ export default function TagList({ label, tags, onChange }: TagListProps) {
 
   return (
     <div>
-      <label className="mb-1 block font-body text-sm text-text-secondary">
+      <label className="mb-0.5 block font-body text-sm text-text-secondary">
         {label}
       </label>
+      {hint && (
+        <p className="mb-1.5 font-body text-xs text-text-muted">{hint}</p>
+      )}
 
       {tags.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5" data-testid="tag-list">

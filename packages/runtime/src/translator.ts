@@ -147,7 +147,7 @@ function buildAgentPrompt(
   // Free-text skill tags
   if (agent.skills.length > 0) {
     const skillsList = agent.skills.map((s) => `- ${s}`).join("\n");
-    sections.push(`## Tags\n${skillsList}`);
+    sections.push(`## Expertise\n${skillsList}`);
   }
 
   // Practices

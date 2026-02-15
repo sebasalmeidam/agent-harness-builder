@@ -3,11 +3,12 @@ import { X } from "lucide-react";
 
 interface TextListProps {
   label: string;
+  hint?: string;
   items: string[];
   onChange: (items: string[]) => void;
 }
 
-export default function TextList({ label, items, onChange }: TextListProps) {
+export default function TextList({ label, hint, items, onChange }: TextListProps) {
   const [inputValue, setInputValue] = useState("");
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -27,9 +28,12 @@ export default function TextList({ label, items, onChange }: TextListProps) {
 
   return (
     <div>
-      <label className="mb-1 block font-body text-sm text-text-secondary">
+      <label className="mb-0.5 block font-body text-sm text-text-secondary">
         {label}
       </label>
+      {hint && (
+        <p className="mb-1.5 font-body text-xs text-text-muted">{hint}</p>
+      )}
 
       {items.length > 0 && (
         <ul className="mb-2 space-y-1" data-testid="text-list">

@@ -305,9 +305,10 @@ export default function AgentSidebar({
             )}
           </div>
 
-          {/* Tags (Free-text) */}
+          {/* Expertise */}
           <TagList
-            label="Tags"
+            label="Expertise"
+            hint="Technologies and areas of knowledge (e.g., React, Python, API design)"
             tags={data.skills}
             onChange={(skills) => handleFieldChange("skills", skills)}
           />
@@ -315,6 +316,7 @@ export default function AgentSidebar({
           {/* Practices */}
           <TextList
             label="Practices"
+            hint="Rules and standards to follow (e.g., Write tests for every function)"
             items={data.practices}
             onChange={(practices) =>
               handleFieldChange("practices", practices)
