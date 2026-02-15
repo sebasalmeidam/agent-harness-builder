@@ -742,13 +742,13 @@ describe("translateHarness", () => {
     const result = translateHarness(harness, "Build feature");
 
     const prompt = result.leadAgent.systemPrompt;
-    expect(prompt).toContain("## Tags");
+    expect(prompt).toContain("## Expertise");
     expect(prompt).toContain("- TypeScript");
     expect(prompt).toContain("- Node.js");
     expect(prompt).toContain("- Express");
   });
 
-  it("includes both Skills and Tags sections when both resolvedSkills and free-text tags are present", () => {
+  it("includes both Skills and Expertise sections when both resolvedSkills and free-text tags are present", () => {
     const harness = makeHarness({
       agents: [
         makeAgent({
@@ -774,7 +774,7 @@ describe("translateHarness", () => {
     expect(prompt).toContain("## Skills");
     expect(prompt).toContain("### API Design");
     expect(prompt).toContain("Follow REST principles. Use proper HTTP status codes.");
-    expect(prompt).toContain("## Tags");
+    expect(prompt).toContain("## Expertise");
     expect(prompt).toContain("- TypeScript");
     expect(prompt).toContain("- Node.js");
   });
