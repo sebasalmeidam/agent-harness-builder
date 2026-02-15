@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Paperclip, Upload, Trash2, File } from "lucide-react";
+import { Paperclip, Upload, Trash2, File, ChevronRight, ChevronDown } from "lucide-react";
 
 interface Attachment {
   name: string;
@@ -23,6 +23,7 @@ export default function AttachmentList({ projectId }: AttachmentListProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAttachments = useCallback(async () => {
@@ -100,11 +101,20 @@ export default function AttachmentList({ projectId }: AttachmentListProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-bg-primary p-5">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="rounded-lg border border-border bg-bg-primary">
+      {/* Collapsible header */}
+      <div
+        className="flex cursor-pointer items-center justify-between px-5 py-3"
+        onClick={() => setExpanded((prev) => !prev)}
+      >
         <div className="flex items-center gap-2">
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-text-muted" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-text-muted" />
+          )}
           <Paperclip className="h-4 w-4 text-text-secondary" />
-          <h3 className="font-heading text-base font-semibold text-black">
+          <h3 className="font-heading text-sm font-medium text-black">
             Attachments
           </h3>
           {attachments.length > 0 && (
@@ -112,13 +122,18 @@ export default function AttachmentList({ projectId }: AttachmentListProps) {
               {attachments.length}
             </span>
           )}
+          {!expanded && attachments.length > 0 && (
+            <span className="font-body text-xs text-text-muted">
+              {attachments.map((a) => a.name).join(", ")}
+            </span>
+          )}
         </div>
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-3 py-1.5 font-body text-sm text-text-primary transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-primary px-2.5 py-1 font-body text-xs text-text-primary transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
         >
-          <Upload className="h-3.5 w-3.5" />
+          <Upload className="h-3 w-3" />
           {uploading ? "Uploading..." : "Upload"}
         </button>
         <input
@@ -130,6 +145,9 @@ export default function AttachmentList({ projectId }: AttachmentListProps) {
         />
       </div>
 
+      {!expanded && attachments.length === 0 && null}
+
+      {expanded && <div className="border-t border-border px-5 pb-4 pt-3">
       {error && (
         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
           <p className="font-body text-xs text-red-700">{error}</p>
@@ -193,6 +211,7 @@ export default function AttachmentList({ projectId }: AttachmentListProps) {
           ))}
         </div>
       )}
+      </div>}
     </div>
   );
 }
