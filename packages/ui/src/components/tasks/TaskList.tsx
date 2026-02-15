@@ -433,23 +433,31 @@ export default function TaskList({
                   >
                     {task.status}
                   </span>
-                  <select
-                    value={task.teamId ?? ""}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleAssignTeam(task.id, e.target.value);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-body text-xs text-text-secondary transition-colors hover:border-border hover:bg-bg-secondary focus:border-primary focus:outline-none"
-                    data-testid={`task-team-${task.id}`}
-                  >
-                    <option value="">No team</option>
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name}
-                      </option>
-                    ))}
-                  </select>
+                  {task.status === "done" ? (
+                    task.teamId && (
+                      <span className="font-body text-xs text-text-secondary">
+                        {teams.find((t) => t.id === task.teamId)?.name ?? "Team"}
+                      </span>
+                    )
+                  ) : (
+                    <select
+                      value={task.teamId ?? ""}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleAssignTeam(task.id, e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-body text-xs text-text-secondary transition-colors hover:border-border hover:bg-bg-secondary focus:border-primary focus:outline-none"
+                      data-testid={`task-team-${task.id}`}
+                    >
+                      <option value="">No team</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <span
                     className="font-body text-xs text-text-secondary"
                     data-testid={`task-progress-${task.id}`}
@@ -489,18 +497,20 @@ export default function TaskList({
                 )}
               </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(task.id, task.title);
-                }}
-                disabled={deletingId === task.id}
-                className="rounded p-2 text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                title="Delete task"
-                data-testid={`delete-task-${task.id}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {task.status !== "done" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(task.id, task.title);
+                  }}
+                  disabled={deletingId === task.id}
+                  className="rounded p-2 text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  title="Delete task"
+                  data-testid={`delete-task-${task.id}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>
