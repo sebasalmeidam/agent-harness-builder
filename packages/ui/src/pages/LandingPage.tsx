@@ -119,7 +119,7 @@ export default function LandingPage() {
               Design your AI agent team. Visually.
             </h1>
             <p className="mt-6 max-w-lg font-body text-lg leading-relaxed text-text-secondary">
-              Stop writing YAML configs. Start dragging nodes. Build teams of AI
+              Stop writing configs. Start dragging nodes. Build teams of AI
               agents that collaborate, review each other&apos;s work, and execute
               real tasks.
             </p>
@@ -136,47 +136,13 @@ export default function LandingPage() {
             </ul>
           </div>
 
-          {/* Right: Hero visual */}
+          {/* Right: Hero image */}
           <div className="flex flex-1 items-center justify-center">
-            <div className="relative w-full max-w-md">
-              {/* Abstract agent network visualization */}
-              <div className="rounded-2xl border border-border bg-white p-8 shadow-lg">
-                <div className="flex items-center justify-center">
-                  <svg
-                    viewBox="0 0 300 220"
-                    className="h-auto w-full"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    {/* Connection lines */}
-                    <line x1="75" y1="60" x2="225" y2="60" stroke="currentColor" className="text-primary/20" strokeWidth="2" />
-                    <line x1="75" y1="60" x2="150" y2="160" stroke="currentColor" className="text-primary/20" strokeWidth="2" />
-                    <line x1="225" y1="60" x2="150" y2="160" stroke="currentColor" className="text-primary/20" strokeWidth="2" />
-                    {/* Animated pulses on lines */}
-                    <circle r="4" fill="currentColor" className="text-primary/40">
-                      <animateMotion dur="3s" repeatCount="indefinite" path="M75,60 L225,60" />
-                    </circle>
-                    <circle r="4" fill="currentColor" className="text-primary/40">
-                      <animateMotion dur="3.5s" repeatCount="indefinite" path="M225,60 L150,160" />
-                    </circle>
-                    {/* Agent nodes */}
-                    <circle cx="75" cy="60" r="28" fill="currentColor" className="text-primary/10" />
-                    <circle cx="75" cy="60" r="28" stroke="currentColor" className="text-primary" strokeWidth="2" />
-                    <text x="75" y="65" textAnchor="middle" className="text-2xl">🏗️</text>
-                    <circle cx="225" cy="60" r="28" fill="currentColor" className="text-primary/10" />
-                    <circle cx="225" cy="60" r="28" stroke="currentColor" className="text-primary" strokeWidth="2" />
-                    <text x="225" y="65" textAnchor="middle" className="text-2xl">👨‍💻</text>
-                    <circle cx="150" cy="160" r="28" fill="currentColor" className="text-primary/10" />
-                    <circle cx="150" cy="160" r="28" stroke="currentColor" className="text-primary" strokeWidth="2" />
-                    <text x="150" y="165" textAnchor="middle" className="text-2xl">🔍</text>
-                    {/* Labels */}
-                    <text x="75" y="105" textAnchor="middle" className="fill-text-secondary font-body text-xs">Architect</text>
-                    <text x="225" y="105" textAnchor="middle" className="fill-text-secondary font-body text-xs">Developer</text>
-                    <text x="150" y="205" textAnchor="middle" className="fill-text-secondary font-body text-xs">Reviewer</text>
-                  </svg>
-                </div>
-              </div>
-            </div>
+            <img
+              src="/hero-agents.png"
+              alt="AI agents connected in a network"
+              className="w-full max-w-lg rounded-2xl shadow-lg"
+            />
           </div>
         </div>
       </section>
