@@ -1238,10 +1238,10 @@ async function handleAssistantMessage(
 
         if (delegatedAgent) {
           // Store the active delegation for matching with tool_result
-          (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation = {
-            agent: delegatedAgent,
-            toolUseId: block.id,
-          };
+          if (!(run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations) {
+            (run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations = new Map();
+          }
+          (run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations!.set(block.id, delegatedAgent);
 
           // Find emoji for this agent
           const delegatedEmoji = Object.keys(run.agentStatuses).includes(delegatedAgent)
@@ -1311,23 +1311,24 @@ async function handleUserMessage(
     for (const block of userMsg.content) {
       if (typeof block === "object" && block.type === "tool_result") {
         // Check if this is a Task tool result (agent completed delegation)
-        const delegation = (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation;
-        if (delegation && block.tool_use_id === delegation.toolUseId) {
+        const delegations = (run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations;
+        const delegatedAgent = delegations?.get(block.tool_use_id);
+        if (delegatedAgent) {
           // Mark delegated agent as done
-          updateAgentStatus(run, delegation.agent, "done", "");
+          updateAgentStatus(run, delegatedAgent, "done", "");
 
           // Add completion activity for the delegated agent
           addActivityEntry(run, {
             timestamp: new Date().toISOString(),
-            agentId: delegation.agent,
+            agentId: delegatedAgent,
             agentEmoji: "",
-            agentName: delegation.agent,
+            agentName: delegatedAgent,
             message: "Work completed",
             type: "complete",
           });
 
-          // Clear the active delegation
-          (run as ExecutionRun & { _activeDelegation?: { agent: string; toolUseId: string } })._activeDelegation = undefined;
+          // Remove this delegation
+          delegations!.delete(block.tool_use_id);
 
           await runService.save(run);
           continue;

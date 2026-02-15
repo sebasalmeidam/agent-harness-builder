@@ -263,6 +263,10 @@ export default function ExecutionPage() {
   // Running duration timer
   useEffect(() => {
     if (activeState.status === "running") {
+      // Calculate initial elapsed from startedAt if available
+      if (historyData?.summary?.totalTime) {
+        setElapsed(historyData.summary.totalTime);
+      }
       timerRef.current = setInterval(() => {
         setElapsed((prev) => prev + 1);
       }, 1000);
@@ -271,6 +275,10 @@ export default function ExecutionPage() {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      // For completed runs, use the summary duration
+      if (activeState.summary?.totalTime) {
+        setElapsed(activeState.summary.totalTime);
+      }
     }
 
     return () => {
@@ -278,7 +286,7 @@ export default function ExecutionPage() {
         clearInterval(timerRef.current);
       }
     };
-  }, [activeState.status]);
+  }, [activeState.status, activeState.summary?.totalTime, historyData?.summary?.totalTime]);
 
   // Refresh checklist when activity log updates (agent may have completed items)
   useEffect(() => {
