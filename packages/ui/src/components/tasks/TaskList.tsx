@@ -194,7 +194,7 @@ export default function TaskList({
     const value = teamId === "" ? null : teamId;
     try {
       const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ teamId: value }),
       });
