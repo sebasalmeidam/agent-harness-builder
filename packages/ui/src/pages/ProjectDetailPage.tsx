@@ -431,9 +431,6 @@ export default function ProjectDetailPage() {
         {/* Task Detail Panel */}
         {selectedTaskId && (
           <div>
-            <h2 className="mb-4 font-heading text-lg font-semibold text-black">
-              Task Details
-            </h2>
             <TaskDetailPanel
               taskId={selectedTaskId}
               projectId={project.id}

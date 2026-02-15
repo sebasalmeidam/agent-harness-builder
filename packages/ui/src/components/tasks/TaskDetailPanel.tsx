@@ -427,9 +427,12 @@ export default function TaskDetailPanel({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-bg-primary p-6">
-        {/* Close button */}
-        {onClose && (
-          <div className="mb-3 flex justify-end">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-heading text-lg font-semibold text-black">
+            Task Details
+          </h2>
+          {onClose && (
             <button
               onClick={onClose}
               className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
@@ -437,8 +440,8 @@ export default function TaskDetailPanel({
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {/* Title */}
         <div className="mb-4">
           <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
