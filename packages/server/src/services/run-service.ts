@@ -103,6 +103,66 @@ export async function list(
 }
 
 /**
+ * Cleans up zombie runs: marks any "running" runs as "failed" on startup.
+ * This handles cases where the server restarted while runs were in progress.
+ */
+export async function cleanupZombieRuns(): Promise<number> {
+  const projectsDir = getProjectsDir();
+  let projectDirs: string[];
+  try {
+    projectDirs = await readdir(projectsDir);
+  } catch {
+    return 0;
+  }
+
+  let cleaned = 0;
+  for (const projectId of projectDirs) {
+    const runsDir = getRunsDir(projectId);
+    let files: string[];
+    try {
+      files = await readdir(runsDir);
+    } catch {
+      continue;
+    }
+
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const filePath = join(runsDir, file);
+        const content = await readFile(filePath, "utf-8");
+        const run: ExecutionRun = JSON.parse(content);
+        if (run.status === "running") {
+          const duration = Math.round((Date.now() - new Date(run.startedAt).getTime()) / 1000);
+          run.status = "failed";
+          run.completedAt = new Date().toISOString();
+          run.error = "Execution lost: server restarted while running";
+          run.summary = {
+            filesChanged: run.files.length,
+            totalTime: duration,
+            iterations: run.activityLog.length,
+            errors: 1,
+          };
+          const tmpPath = filePath + ".tmp";
+          await writeFile(tmpPath, JSON.stringify(run, null, 2), "utf-8");
+          await rename(tmpPath, filePath);
+          cleaned++;
+
+          // Also update the associated task if any
+          if (run.taskId) {
+            try {
+              const taskService = await import("./task-service.js");
+              await taskService.update(run.projectId, run.taskId, { status: "failed" });
+            } catch { /* ignore */ }
+          }
+        }
+      } catch { /* skip corrupted files */ }
+    }
+  }
+
+  return cleaned;
+}
+
+/**
  * Removes an execution run file from disk.
  * Returns true if the file was deleted, false if it did not exist.
  */
