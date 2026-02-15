@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { X, HelpCircle } from "lucide-react";
 
 interface TextListProps {
   label: string;
@@ -28,12 +28,17 @@ export default function TextList({ label, hint, items, onChange }: TextListProps
 
   return (
     <div>
-      <label className="mb-0.5 block font-body text-sm text-text-secondary">
-        {label}
-      </label>
-      {hint && (
-        <p className="mb-1.5 font-body text-xs text-text-muted">{hint}</p>
-      )}
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <label className="font-body text-sm text-text-secondary">{label}</label>
+        {hint && (
+          <span className="group relative">
+            <HelpCircle className="h-3.5 w-3.5 text-text-muted" />
+            <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-48 -translate-x-1/2 rounded-md bg-black px-2.5 py-1.5 font-body text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              {hint}
+            </span>
+          </span>
+        )}
+      </div>
 
       {items.length > 0 && (
         <ul className="mb-2 space-y-1" data-testid="text-list">
