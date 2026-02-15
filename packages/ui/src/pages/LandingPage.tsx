@@ -10,6 +10,7 @@ import {
   FolderKanban,
   RefreshCw,
   Zap,
+  Github,
 } from "lucide-react";
 
 const checkmarkBullets = [
@@ -95,6 +96,15 @@ export default function LandingPage() {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          <a
+            href="https://github.com/sebasalmeidam/agent-harness-builder"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden items-center gap-1.5 font-body text-sm text-text-secondary transition-colors hover:text-text-primary sm:flex"
+          >
+            <Github className="h-4 w-4" />
+            GitHub
+          </a>
           <span className="hidden font-body text-sm text-text-secondary sm:block">
             Claude Agent SDK Hackathon 2025
           </span>
