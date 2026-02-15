@@ -308,7 +308,7 @@ export default function AgentSidebar({
           {/* Expertise */}
           <TagList
             label="Expertise"
-            hint="Technologies and areas of knowledge (e.g., React, Python, API design)"
+            hint="Areas of knowledge: React, Python, Excel, UX design, testing, DevOps..."
             tags={data.skills}
             onChange={(skills) => handleFieldChange("skills", skills)}
           />
