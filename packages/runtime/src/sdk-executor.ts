@@ -26,6 +26,7 @@ export interface ExecuteWithSdkParams {
   tools: string[];
   maxBudgetUsd?: number;
   agents?: Record<string, AgentDefinition>;
+  apiKey?: string;
 }
 
 /**
@@ -95,6 +96,7 @@ export function executeWithSdk(
     tools,
     maxBudgetUsd = 5.0,
     agents,
+    apiKey,
   } = params;
 
   return query({
@@ -109,6 +111,7 @@ export function executeWithSdk(
       allowDangerouslySkipPermissions: true,
       maxBudgetUsd,
       ...(agents && { agents }),
+      ...(apiKey && { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } }),
     },
   });
 }

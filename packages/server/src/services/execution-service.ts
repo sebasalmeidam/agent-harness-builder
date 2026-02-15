@@ -1114,6 +1114,7 @@ async function tryRealSdkExecution(
       tools,
       maxBudgetUsd: 5.0,
       agents,
+      apiKey,
     });
 
     // Process SDK messages
