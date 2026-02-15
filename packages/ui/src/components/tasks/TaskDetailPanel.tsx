@@ -105,6 +105,16 @@ export default function TaskDetailPanel({
   // Debounce timer
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Reset state when task changes
+  useEffect(() => {
+    setRunId(null);
+    setRuns([]);
+    setResultSummary(null);
+    setAgentStatuses({});
+    setShowPrompt(false);
+    setPromptText(null);
+  }, [taskId]);
+
   // Fetch task data
   useEffect(() => {
     async function fetchTask() {
