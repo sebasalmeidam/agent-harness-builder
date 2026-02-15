@@ -183,11 +183,20 @@ export default function TaskList({
     }
   }
 
-  // Get team name by ID
-  function getTeamName(teamId: string | null): string {
-    if (!teamId) return "No team";
-    const team = teams.find((t) => t.id === teamId);
-    return team ? team.name : "Unknown team";
+  // Assign team to task inline
+  async function handleAssignTeam(taskId: string, teamId: string) {
+    const value = teamId === "" ? null : teamId;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: value }),
+      });
+      if (res.ok) {
+        const updated: Task = await res.json();
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      }
+    } catch { /* ignore */ }
   }
 
   // Format date compactly
@@ -327,12 +336,23 @@ export default function TaskList({
                   >
                     {task.status}
                   </span>
-                  <span
-                    className="font-body text-xs text-text-secondary"
+                  <select
+                    value={task.teamId ?? ""}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleAssignTeam(task.id, e.target.value);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-body text-xs text-text-secondary transition-colors hover:border-border hover:bg-bg-secondary focus:border-primary focus:outline-none"
                     data-testid={`task-team-${task.id}`}
                   >
-                    {getTeamName(task.teamId)}
-                  </span>
+                    <option value="">No team</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
                   <span
                     className="font-body text-xs text-text-secondary"
                     data-testid={`task-progress-${task.id}`}
