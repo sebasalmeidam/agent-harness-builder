@@ -424,6 +424,8 @@ export default function TaskDetailPanel({
     return null;
   }
 
+  const isDone = task.status === "done";
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-bg-primary p-6">
@@ -442,6 +444,16 @@ export default function TaskDetailPanel({
             </button>
           )}
         </div>
+
+        {/* Completed notice */}
+        {isDone && (
+          <div className="mb-4 rounded-md border border-success/20 bg-success-light px-4 py-2.5">
+            <p className="font-body text-sm text-success">
+              ✓ Task completed. Create a new task to make changes.
+            </p>
+          </div>
+        )}
+
         {/* Title */}
         <div className="mb-4">
           <label className="mb-1 block font-body text-xs font-medium text-text-secondary">
@@ -450,9 +462,10 @@ export default function TaskDetailPanel({
           <input
             type="text"
             value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
+            onChange={(e) => !isDone && setEditTitle(e.target.value)}
             onBlur={handleTitleBlur}
-            className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            disabled={isDone}
+            className={`w-full rounded-md border border-border px-3 py-2 font-body text-base font-medium text-black focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isDone ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
             data-testid="task-title-input"
           />
         </div>
@@ -464,11 +477,12 @@ export default function TaskDetailPanel({
           </label>
           <textarea
             value={editDescription}
-            onChange={(e) => setEditDescription(e.target.value)}
+            onChange={(e) => !isDone && setEditDescription(e.target.value)}
             onBlur={handleDescriptionBlur}
+            disabled={isDone}
             placeholder="Add a description..."
             rows={3}
-            className="w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={`w-full rounded-md border border-border px-3 py-2 font-body text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${isDone ? "cursor-not-allowed bg-bg-secondary opacity-60" : "bg-white"}`}
             data-testid="task-description-input"
           />
         </div>
@@ -478,10 +492,12 @@ export default function TaskDetailPanel({
           <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
             Checklist
           </label>
-          <ChecklistEditor
-            items={editChecklist}
-            onChange={handleChecklistChange}
-          />
+          <div className={isDone ? "pointer-events-none opacity-60" : ""}>
+            <ChecklistEditor
+              items={editChecklist}
+              onChange={handleChecklistChange}
+            />
+          </div>
         </div>
 
         {/* Team Selector */}
@@ -489,7 +505,9 @@ export default function TaskDetailPanel({
           <label className="mb-2 block font-body text-xs font-medium text-text-secondary">
             Assigned Team
           </label>
-          <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
+          <div className={isDone ? "pointer-events-none opacity-60" : ""}>
+            <TeamSelector teamId={editTeamId} onChange={handleTeamChange} />
+          </div>
         </div>
 
         {/* Team Agent Status */}
