@@ -799,9 +799,10 @@ function TeamDetailContent() {
             <textarea
               value={editedWorkflow}
               onChange={handleWorkflowChange}
+              disabled={generatingWorkflow}
               rows={editedWorkflow ? 15 : 5}
-              className="mt-3 w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
-              placeholder="Describe the workflow: who does what, in what order, what are the handoff criteria..."
+              className="mt-3 w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light disabled:cursor-not-allowed disabled:bg-bg-secondary disabled:opacity-60"
+              placeholder={generatingWorkflow ? "Generating workflow..." : "Describe the workflow: who does what, in what order, what are the handoff criteria..."}
             />
           </>
         )}
