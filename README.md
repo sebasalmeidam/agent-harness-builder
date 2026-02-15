@@ -21,13 +21,13 @@ Open [http://localhost:4173](http://localhost:4173) in your browser.
 
 ## 📋 Prerequisites
 
-| Requirement | Version | Why |
-|-------------|---------|-----|
-| **Node.js** | 22+ | Runtime, native ESM support |
-| **pnpm** | 10+ | Workspace package manager |
-| **Claude Code CLI** | Latest | Agent execution engine (install: `npm install -g @anthropic-ai/claude-code`) |
+Only **Node.js 22+** is required. The setup script auto-installs everything else:
 
-Claude Code CLI must be **authenticated** before running agents. Run `claude` once to complete the auth flow.
+| Dependency | Auto-installed? | Notes |
+|------------|:-:|-------|
+| **Node.js 22+** | No | [Install manually](https://nodejs.org) or via `nvm install 22` |
+| **pnpm** | ✅ | Package manager |
+| **Claude Code CLI** | ✅ | Agent execution engine. Run `claude` once after install to authenticate |
 
 **Optional:** An Anthropic API key (set in Settings) enables AI generation features like "Process Team" workflow generation.
 
