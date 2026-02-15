@@ -752,37 +752,49 @@ function TeamDetailContent() {
         )}
       </div>
 
-      {/* Workflow section (collapsible) */}
-      {(editedWorkflow || showWorkflow) && (
-        <div className="mt-4 rounded-lg border border-border bg-bg-primary p-4">
-          <button
-            type="button"
-            onClick={() => setShowWorkflow(!showWorkflow)}
-            className="flex w-full items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
-          >
-            {showWorkflow ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
+      {/* Workflow section */}
+      <div className="mt-4 rounded-lg border border-border bg-bg-primary p-4">
+        <button
+          type="button"
+          onClick={() => setShowWorkflow(!showWorkflow)}
+          className="flex w-full items-center gap-1 font-body text-sm font-medium text-text-primary hover:text-primary"
+        >
+          {showWorkflow ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          Team Workflow
+          {editedWorkflow ? (
+            <span className="ml-1 text-xs text-text-secondary">
+              ({editedWorkflow.split("\n").length} lines)
+            </span>
+          ) : (
+            <span className="ml-1 text-xs text-text-muted">
+              (not defined)
+            </span>
+          )}
+        </button>
+        {showWorkflow && (
+          <>
+            {!editedWorkflow && (
+              <div className="mt-3 rounded-md border border-dashed border-border bg-bg-secondary px-4 py-5 text-center">
+                <Sparkles className="mx-auto h-5 w-5 text-text-muted" />
+                <p className="mt-2 font-body text-sm text-text-secondary">
+                  Define how your agents collaborate. Click <strong>Process Team</strong> to auto-generate from your agent graph, or write it manually below.
+                </p>
+              </div>
             )}
-            View Workflow
-            {editedWorkflow && (
-              <span className="ml-1 text-xs text-text-secondary">
-                ({editedWorkflow.split("\n").length} lines)
-              </span>
-            )}
-          </button>
-          {showWorkflow && (
             <textarea
               value={editedWorkflow}
               onChange={handleWorkflowChange}
-              rows={15}
+              rows={editedWorkflow ? 15 : 5}
               className="mt-3 w-full rounded-md border border-border bg-white px-3 py-2 font-body text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
-              placeholder="Team workflow will appear here after processing..."
+              placeholder="Describe the workflow: who does what, in what order, what are the handoff criteria..."
             />
-          )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Sticky save bar: appears when there are unsaved changes */}
       {(isDirty || saveMessage) && (
