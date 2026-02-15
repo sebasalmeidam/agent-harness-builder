@@ -98,12 +98,16 @@ export default function LandingPage() {
           <span className="hidden font-body text-sm text-text-secondary sm:block">
             Claude Agent SDK Hackathon 2025
           </span>
-          <Link
-            to="/projects"
+          <a
+            href="#quick-setup"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById("quick-setup")?.scrollIntoView({ behavior: "smooth" });
+            }}
             className="rounded-lg bg-primary px-5 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-primary/90"
           >
             Get Started
-          </Link>
+          </a>
         </div>
       </nav>
 
@@ -207,7 +211,7 @@ export default function LandingPage() {
       </section>
 
       {/* Quick Setup Section */}
-      <section className="px-6 py-20 sm:px-12">
+      <section id="quick-setup" className="scroll-mt-20 px-6 py-20 sm:px-12">
         <div className="mx-auto max-w-3xl">
           <h3 className="text-center font-heading text-3xl font-semibold text-black">
             Quick setup
