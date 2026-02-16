@@ -9,8 +9,8 @@ import { DEFAULT_EMOJIS } from "../emoji-picker/emoji-data";
 // Predefined model options
 const PREDEFINED_MODELS = [
   { id: "claude-sonnet-4-5-20250929", label: "Sonnet" },
-  { id: "claude-opus-4-20250514", label: "Opus" },
-  { id: "claude-haiku-3-5-20241022", label: "Haiku" },
+  { id: "claude-opus-4-6", label: "Opus" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku" },
 ] as const;
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";

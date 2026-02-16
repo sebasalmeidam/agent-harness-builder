@@ -44,9 +44,9 @@ router.put("/", async (req, res) => {
     }
     
     const validModels = [
+      "claude-opus-4-6",
       "claude-sonnet-4-5-20250929",
-      "claude-opus-4-6-20250715",
-      "claude-haiku-3-5-20241022",
+      "claude-haiku-4-5-20251001",
     ];
     
     if (!validModels.includes(defaultModel)) {

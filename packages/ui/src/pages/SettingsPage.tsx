@@ -11,8 +11,8 @@ interface Settings {
 
 const AVAILABLE_MODELS = [
   { value: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)" },
-  { value: "claude-opus-4-6-20250715", label: "Claude Opus 4.6 (claude-opus-4-6-20250715)" },
-  { value: "claude-haiku-3-5-20241022", label: "Claude Haiku 3.5 (claude-haiku-3-5-20241022)" },
+  { value: "claude-opus-4-6", label: "Claude Opus 4.6 (claude-opus-4-6)" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" },
 ];
 
 export default function SettingsPage() {

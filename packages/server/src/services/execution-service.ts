@@ -1127,7 +1127,62 @@ async function tryRealSdkExecution(
 
         // Process different message types
         if (message.type === "assistant") {
-          await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
+          // Check if this message comes from a subagent (has parent_tool_use_id)
+          const parentToolId = (message as Record<string, unknown>).parent_tool_use_id as string | null;
+          if (parentToolId) {
+            // This is a subagent message - find which agent it belongs to
+            const delegations = (run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations;
+            const delegatedAgent = delegations?.get(parentToolId);
+            if (delegatedAgent) {
+              const delegatedEmoji = getAgentEmoji(delegatedAgent, harnessAgents);
+              const delegatedId = getAgentId(delegatedAgent, harnessAgents);
+              await handleAssistantMessage(run, message, delegatedId, delegatedAgent, delegatedEmoji);
+            } else {
+              await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
+            }
+          } else {
+            await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
+          }
+        } else if (message.type === "system") {
+          // Handle system messages including task notifications
+          const sysMessage = message as Record<string, unknown>;
+          if (sysMessage.subtype === "task_notification") {
+            const taskStatus = sysMessage.status as string;
+            const summary = sysMessage.summary as string || "";
+            const taskId = sysMessage.task_id as string;
+
+            // Find the delegated agent for this task
+            const delegations = (run as ExecutionRun & { _activeDelegations?: Map<string, string> })._activeDelegations;
+            let completedAgent: string | null = null;
+
+            if (delegations) {
+              // Match by task_id or find the first working agent
+              for (const [toolId, agentName] of delegations.entries()) {
+                if (toolId === taskId || run.agentStatuses[agentName] === "working") {
+                  completedAgent = agentName;
+                  delegations.delete(toolId);
+                  break;
+                }
+              }
+            }
+
+            if (completedAgent) {
+              const agentEmoji = getAgentEmoji(completedAgent, harnessAgents);
+              const agentId = getAgentId(completedAgent, harnessAgents);
+              const newStatus = taskStatus === "completed" ? "done" : "blocked";
+
+              updateAgentStatus(run, completedAgent, newStatus as AgentStatus, agentEmoji);
+              addActivityEntry(run, {
+                timestamp: new Date().toISOString(),
+                agentId,
+                agentEmoji,
+                agentName: completedAgent,
+                message: summary || `Task ${taskStatus}`,
+                type: taskStatus === "completed" ? "complete" : "error",
+              });
+              await runService.save(run);
+            }
+          }
         } else if (message.type === "user") {
           await handleUserMessage(run, message, leadId, leadName, leadEmoji);
         } else if (message.type === "result") {
