@@ -1121,6 +1121,26 @@ async function tryRealSdkExecution(
     let errorCount = 0;
     let previousAgentResult = "";
 
+    // If multi-agent, mark Orchestrator as working then done (harness is the orchestrator)
+    if (hasTeammates && run.agentStatuses["Orchestrator"] !== undefined) {
+      updateAgentStatus(run, "Orchestrator", "working", "🎯");
+      addActivityEntry(run, {
+        timestamp: new Date().toISOString(),
+        agentId: "orchestrator",
+        agentEmoji: "🎯",
+        agentName: "Orchestrator",
+        message: `Coordinating workflow: ${agentQueue.map(a => a.name).join(" → ")}`,
+        type: "action",
+      });
+      await runService.save(run);
+
+      // Brief pause for UI to show orchestrator working
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      updateAgentStatus(run, "Orchestrator", "done", "🎯");
+      await runService.save(run);
+    }
+
     for (let agentIdx = 0; agentIdx < agentQueue.length; agentIdx++) {
       const currentAgent = agentQueue[agentIdx];
       const agentTools = resolveTools(currentAgent.skills, false);
