@@ -1372,13 +1372,20 @@ async function handleAssistantMessage(
       const toolName = block.name;
       const toolInput = block.input as Record<string, unknown>;
 
-      // Detect Task tool delegation and update teammate status
-      if (toolName === "Task") {
+      // Detect subagent delegation via Task or Agent tool
+      // The Claude Agent SDK uses the "Agent" tool with subagent_type field
+      if (toolName === "Task" || toolName === "Agent") {
         const delegatedAgent = typeof toolInput["agent"] === "string"
           ? toolInput["agent"]
-          : typeof toolInput["description"] === "string"
-            ? detectAgentFromDescription(toolInput["description"], run)
-            : null;
+          : typeof toolInput["subagent_type"] === "string"
+            ? detectAgentFromDescription(toolInput["subagent_type"], run)
+            : typeof toolInput["name"] === "string"
+              ? detectAgentFromDescription(toolInput["name"], run)
+              : typeof toolInput["description"] === "string"
+                ? detectAgentFromDescription(toolInput["description"], run)
+                : typeof toolInput["prompt"] === "string"
+                  ? detectAgentFromDescription(toolInput["prompt"], run)
+                  : null;
 
         if (delegatedAgent) {
           // Store the active delegation for matching with tool_result
