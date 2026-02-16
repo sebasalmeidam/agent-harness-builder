@@ -7,7 +7,6 @@ import type {
   ActivityEntry,
   ExecutionSummary,
   TranslatedTeam,
-  AgentDefinition,
 } from "@agent-harness/runtime";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
@@ -1044,42 +1043,9 @@ async function tryRealSdkExecution(
       await fs.mkdir(cwd, { recursive: true }).catch(() => {});
     }
 
-    // Resolve tools for the lead agent
-    // If the lead is the Orchestrator (synthetic), restrict to Task tool only
-    // Otherwise, resolve based on skills + Task tool for delegation
-    const isOrchestrator = leadName === "Orchestrator";
-    let tools: string[];
-    if (isOrchestrator) {
-      tools = ["Task"];
-    } else {
-      const leadAgentData = harnessAgents.find((a) => a.id === leadId);
-      const skills: string[] = leadAgentData?.skills ?? [];
-      tools = resolveTools(skills, true);
-    }
-
-    // Build agents definition for SDK if teammates exist
-    let agents: Record<string, AgentDefinition> | undefined;
-    if (translatedTeam.teammates.length > 0) {
-      agents = {};
-      for (const teammate of translatedTeam.teammates) {
-        const teammateHarnessAgent = harnessAgents.find((a) => a.name === teammate.name);
-        const teammateSkills: string[] = teammateHarnessAgent?.skills ?? [];
-        const teammateTools = resolveTools(teammateSkills, false);
-
-        const role = teammateHarnessAgent?.role || teammate.name;
-        const goal = teammateHarnessAgent?.goal || "Team member";
-        agents[teammate.name] = {
-          description: `${role}: ${goal}`,
-          prompt: teammate.systemPrompt,
-          tools: teammateTools,
-        };
-      }
-    }
-
     // Build prompt from task description + checklist, or fall back to project spec
     let prompt: string;
     if (options?.taskDescription) {
-      // Construct task-level prompt
       const lines: string[] = [];
       lines.push(`Task: ${options.taskDescription}`);
 
@@ -1098,157 +1064,247 @@ async function tryRealSdkExecution(
 
       prompt = lines.join("\n");
     } else {
-      // Backward compatible: use project spec (default to empty if undefined)
       prompt = project.spec || "";
     }
 
-    // Update agent status to working
-    updateAgentStatus(run, leadName, "working", leadEmoji);
+    // --- Sequential Multi-Agent Execution ---
+    // Instead of relying on SDK subagent delegation (which has limited tool execution),
+    // the harness orchestrates by running each agent as a separate SDK query() call.
+    // This ensures each agent gets full tool access and proper execution turns.
+    // The workflow order is: lead agent first, then teammates in sequence.
 
-    // Call SDK executor
-    const sdkGenerator = executeWithSdk({
-      systemPrompt: leadAgent.systemPrompt,
-      model: leadAgent.model,
-      cwd,
-      prompt,
-      tools,
-      maxBudgetUsd: 5.0,
-      agents,
-      apiKey,
-    });
+    const hasTeammates = translatedTeam.teammates.length > 0;
 
-    // Process SDK messages
+    // Build the ordered list of agents to execute
+    interface AgentExecution {
+      name: string;
+      id: string;
+      emoji: string;
+      systemPrompt: string;
+      model: string;
+      skills: string[];
+      isLead: boolean;
+    }
+
+    const agentQueue: AgentExecution[] = [];
+
+    if (hasTeammates) {
+      // Multi-agent: execute each agent sequentially
+      // First agent gets the original prompt, subsequent agents get context from previous results
+      for (const teammate of translatedTeam.teammates) {
+        const hAgent = harnessAgents.find((a) => a.name === teammate.name);
+        agentQueue.push({
+          name: teammate.name,
+          id: hAgent?.id || teammate.name,
+          emoji: hAgent?.emoji || "🤖",
+          systemPrompt: teammate.systemPrompt,
+          model: teammate.model || leadAgent.model,
+          skills: hAgent?.skills ?? [],
+          isLead: false,
+        });
+      }
+    } else {
+      // Single agent: execute the lead directly
+      const hAgent = harnessAgents.find((a) => a.id === leadId);
+      agentQueue.push({
+        name: leadName,
+        id: leadId,
+        emoji: leadEmoji,
+        systemPrompt: leadAgent.systemPrompt,
+        model: leadAgent.model,
+        skills: hAgent?.skills ?? [],
+        isLead: true,
+      });
+    }
+
     let iterationCount = 0;
     let errorCount = 0;
+    let previousAgentResult = "";
 
-    try {
-      for await (const message of sdkGenerator) {
-        iterationCount++;
-
-        // Process different message types
-        if (message.type === "assistant") {
-          await handleAssistantMessage(run, message, leadId, leadName, leadEmoji);
-        } else if (message.type === "user") {
-          await handleUserMessage(run, message, leadId, leadName, leadEmoji);
-        } else if (message.type === "result") {
-          // Result message indicates execution completion
-          const totalTime = Math.round((Date.now() - startTime) / 1000);
-
-          if (message.subtype === "success") {
-            // Success case
-            const summary: ExecutionSummary = {
-              filesChanged: run.files.length,
-              totalTime,
-              iterations: iterationCount,
-              errors: errorCount,
-            };
-
-            // Store cost if available
-            if (message.total_cost_usd) {
-              run.costUsd = message.total_cost_usd;
-            }
-
-            // Add completion activity entry
-            addActivityEntry(run, {
-              timestamp: new Date().toISOString(),
-              agentId: leadId,
-              agentEmoji: leadEmoji,
-              agentName: leadName,
-              message: message.result || "Work completed successfully",
-              type: "complete",
-            });
-
-            updateAgentStatus(run, leadName, "done", leadEmoji);
-            await completeRun(run, "completed", summary, null);
-          } else {
-            // Error case (subtype !== "success")
-            errorCount++;
-
-            const summary: ExecutionSummary = {
-              filesChanged: run.files.length,
-              totalTime,
-              iterations: iterationCount,
-              errors: errorCount,
-            };
-
-            // Store cost if available
-            if (message.total_cost_usd) {
-              run.costUsd = message.total_cost_usd;
-            }
-
-            // Join all error messages from the errors array
-            const errorMessage = message.errors && message.errors.length > 0
-              ? message.errors.join("; ")
-              : `Execution failed with error: ${message.subtype}`;
-
-            // Add error activity entry
-            addActivityEntry(run, {
-              timestamp: new Date().toISOString(),
-              agentId: leadId,
-              agentEmoji: leadEmoji,
-              agentName: leadName,
-              message: errorMessage,
-              type: "error",
-            });
-
-            updateAgentStatus(run, leadName, "blocked", leadEmoji);
-            await completeRun(run, "failed", summary, errorMessage);
-          }
-
-          // Result message is always the last message, execution is done
-          return { executed: true };
-        }
-
-        // Persist intermediate state periodically
-        if (iterationCount % 10 === 0) {
-          await runService.save(run);
-        }
-      }
-
-      // If we reach here without a result message, something went wrong
-      errorCount++;
-      const totalTime = Math.round((Date.now() - startTime) / 1000);
-      const summary: ExecutionSummary = {
-        filesChanged: run.files.length,
-        totalTime,
-        iterations: iterationCount,
-        errors: errorCount,
-      };
-
-      await completeRun(run, "failed", summary, "SDK execution ended without result message");
-      return { executed: true };
-    } catch (err: unknown) {
-      // Classify and handle SDK errors
-      errorCount++;
-      const totalTime = Math.round((Date.now() - startTime) / 1000);
-      const errorMessage = classifyAndFormatSdkError(err);
-
-      // Add error activity entry with clear user-facing message
+    // If multi-agent, mark Orchestrator as working then done (harness is the orchestrator)
+    if (hasTeammates && run.agentStatuses["Orchestrator"] !== undefined) {
+      updateAgentStatus(run, "Orchestrator", "working", "🎯");
       addActivityEntry(run, {
         timestamp: new Date().toISOString(),
-        agentId: leadId,
-        agentEmoji: leadEmoji,
-        agentName: leadName,
-        message: errorMessage,
-        type: "error",
+        agentId: "orchestrator",
+        agentEmoji: "🎯",
+        agentName: "Orchestrator",
+        message: `Coordinating workflow: ${agentQueue.map(a => a.name).join(" → ")}`,
+        type: "action",
+      });
+      await runService.save(run);
+
+      // Brief pause for UI to show orchestrator working
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      updateAgentStatus(run, "Orchestrator", "done", "🎯");
+      await runService.save(run);
+    }
+
+    for (let agentIdx = 0; agentIdx < agentQueue.length; agentIdx++) {
+      const currentAgent = agentQueue[agentIdx];
+      const agentTools = resolveTools(currentAgent.skills, false);
+
+      // Build agent-specific prompt
+      let agentPrompt: string;
+      if (agentIdx === 0) {
+        // First agent gets the original task prompt
+        agentPrompt = prompt;
+      } else {
+        // Subsequent agents get context from previous agent's work
+        agentPrompt = `${prompt}\n\n## Context from Previous Agent\nThe previous team member completed their part. Their summary:\n${previousAgentResult}\n\nNow it's your turn. Continue the work based on the files and outputs already created. Review and build upon what was done.`;
+      }
+
+      // Update agent status to working
+      updateAgentStatus(run, currentAgent.name, "working", currentAgent.emoji);
+
+      // Add handoff activity entry
+      if (agentIdx === 0 && hasTeammates) {
+        addActivityEntry(run, {
+          timestamp: new Date().toISOString(),
+          agentId: "system",
+          agentEmoji: "🎯",
+          agentName: "Harness",
+          message: `Starting workflow: ${agentQueue.map(a => a.name).join(" → ")}`,
+          type: "action",
+        });
+      }
+      if (agentIdx > 0) {
+        addActivityEntry(run, {
+          timestamp: new Date().toISOString(),
+          agentId: "system",
+          agentEmoji: "🎯",
+          agentName: "Harness",
+          message: `Handing off to ${currentAgent.name}`,
+          type: "handoff",
+        });
+      }
+      await runService.save(run);
+
+      // Execute this agent's SDK query
+      const sdkGenerator = executeWithSdk({
+        systemPrompt: currentAgent.systemPrompt,
+        model: currentAgent.model,
+        cwd,
+        prompt: agentPrompt,
+        tools: agentTools,
+        maxBudgetUsd: 3.0,
+        apiKey,
       });
 
-      // Update agent status to blocked
-      updateAgentStatus(run, leadName, "blocked", leadEmoji);
+      let agentResult = "";
 
-      // Complete run as failed
-      const summary: ExecutionSummary = {
-        filesChanged: run.files.length,
-        totalTime,
-        iterations: iterationCount,
-        errors: errorCount,
-      };
+      try {
+        for await (const message of sdkGenerator) {
+          iterationCount++;
 
-      await completeRun(run, "failed", summary, errorMessage);
-      return { executed: true };
+          if (message.type === "assistant") {
+            await handleAssistantMessage(run, message, currentAgent.id, currentAgent.name, currentAgent.emoji);
+          } else if (message.type === "user") {
+            await handleUserMessage(run, message, currentAgent.id, currentAgent.name, currentAgent.emoji);
+          } else if (message.type === "result") {
+            // Store cost
+            if (message.total_cost_usd) {
+              run.costUsd = (run.costUsd || 0) + message.total_cost_usd;
+            }
+
+            if (message.subtype === "success") {
+              agentResult = message.result || "Work completed successfully";
+
+              addActivityEntry(run, {
+                timestamp: new Date().toISOString(),
+                agentId: currentAgent.id,
+                agentEmoji: currentAgent.emoji,
+                agentName: currentAgent.name,
+                message: agentResult,
+                type: "complete",
+              });
+
+              updateAgentStatus(run, currentAgent.name, "done", currentAgent.emoji);
+              await runService.save(run);
+            } else {
+              // Agent failed
+              errorCount++;
+              const errorMessage = message.errors && message.errors.length > 0
+                ? message.errors.join("; ")
+                : `Agent failed: ${message.subtype}`;
+
+              addActivityEntry(run, {
+                timestamp: new Date().toISOString(),
+                agentId: currentAgent.id,
+                agentEmoji: currentAgent.emoji,
+                agentName: currentAgent.name,
+                message: errorMessage,
+                type: "error",
+              });
+
+              updateAgentStatus(run, currentAgent.name, "blocked", currentAgent.emoji);
+              await runService.save(run);
+
+              // Don't continue to next agent if this one failed
+              const totalTime = Math.round((Date.now() - startTime) / 1000);
+              const summary: ExecutionSummary = {
+                filesChanged: run.files.length,
+                totalTime,
+                iterations: iterationCount,
+                errors: errorCount,
+              };
+              await completeRun(run, "failed", summary, errorMessage);
+              return { executed: true };
+            }
+
+            // Break out of message loop for this agent (move to next agent)
+            break;
+          }
+
+          // Persist intermediate state periodically
+          if (iterationCount % 10 === 0) {
+            await runService.save(run);
+          }
+        }
+      } catch (err: unknown) {
+        // Agent-level SDK error
+        errorCount++;
+        const errorMessage = classifyAndFormatSdkError(err);
+
+        addActivityEntry(run, {
+          timestamp: new Date().toISOString(),
+          agentId: currentAgent.id,
+          agentEmoji: currentAgent.emoji,
+          agentName: currentAgent.name,
+          message: errorMessage,
+          type: "error",
+        });
+
+        updateAgentStatus(run, currentAgent.name, "blocked", currentAgent.emoji);
+
+        const totalTime = Math.round((Date.now() - startTime) / 1000);
+        const summary: ExecutionSummary = {
+          filesChanged: run.files.length,
+          totalTime,
+          iterations: iterationCount,
+          errors: errorCount,
+        };
+        await completeRun(run, "failed", summary, errorMessage);
+        return { executed: true };
+      }
+
+      // Store result for next agent's context
+      previousAgentResult = agentResult;
     }
+
+    // All agents completed successfully
+    const totalTime = Math.round((Date.now() - startTime) / 1000);
+    const summary: ExecutionSummary = {
+      filesChanged: run.files.length,
+      totalTime,
+      iterations: iterationCount,
+      errors: errorCount,
+    };
+    await completeRun(run, "completed", summary, null);
+    return { executed: true };
+
   } catch (err: unknown) {
-    // Outer catch for non-SDK errors (e.g., project not found)
     console.error("Unexpected error in SDK execution:", err);
     return { executed: false };
   }
@@ -1317,13 +1373,20 @@ async function handleAssistantMessage(
       const toolName = block.name;
       const toolInput = block.input as Record<string, unknown>;
 
-      // Detect Task tool delegation and update teammate status
-      if (toolName === "Task") {
+      // Detect subagent delegation via Task or Agent tool
+      // The Claude Agent SDK uses the "Agent" tool with subagent_type field
+      if (toolName === "Task" || toolName === "Agent") {
         const delegatedAgent = typeof toolInput["agent"] === "string"
           ? toolInput["agent"]
-          : typeof toolInput["description"] === "string"
-            ? detectAgentFromDescription(toolInput["description"], run)
-            : null;
+          : typeof toolInput["subagent_type"] === "string"
+            ? detectAgentFromDescription(toolInput["subagent_type"], run)
+            : typeof toolInput["name"] === "string"
+              ? detectAgentFromDescription(toolInput["name"], run)
+              : typeof toolInput["description"] === "string"
+                ? detectAgentFromDescription(toolInput["description"], run)
+                : typeof toolInput["prompt"] === "string"
+                  ? detectAgentFromDescription(toolInput["prompt"], run)
+                  : null;
 
         if (delegatedAgent) {
           // Store the active delegation for matching with tool_result

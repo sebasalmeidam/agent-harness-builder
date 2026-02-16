@@ -275,6 +275,25 @@ export default function ExecutionPage() {
   // The active state: either history data or SSE data
   const activeState = isHistoryMode && historyData ? historyData : sseState;
 
+  // Sync cost from REST when run reaches terminal status (SSE may not carry final cost)
+  useEffect(() => {
+    if (!projectId || !runId) return;
+    if (activeState.status !== "completed" && activeState.status !== "failed") return;
+
+    async function syncCost() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/runs/${runId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.costUsd != null) {
+            setRunData((prev) => ({ ...prev, costUsd: data.costUsd }));
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    syncCost();
+  }, [activeState.status, projectId, runId]);
+
   // Poll for result summary if completed but not yet available
   useEffect(() => {
     if (resultSummary || activeState.status === "running" || !projectId || !runId) return;
@@ -287,6 +306,10 @@ export default function ExecutionPage() {
           const data = await res.json();
           if (data.resultSummary) {
             setResultSummary(data.resultSummary);
+          }
+          // Sync cost from REST to ensure CostCounter matches Summary
+          if (data.costUsd != null) {
+            setRunData((prev) => ({ ...prev, costUsd: data.costUsd }));
           }
         }
       } catch { /* ignore */ }
